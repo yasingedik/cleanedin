@@ -1,0 +1,20 @@
+node_modules/
+dist/
+playwright-report/
+test-results/
+.DS_Store
+
+# Local captures and personal feed exports
+tests/fixtures/live/
+resources/real/
+
+# Local secret material / signing artifacts
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.mobileprovision

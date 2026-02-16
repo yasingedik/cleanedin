@@ -1,0 +1,31 @@
+name: Idea
+description: Capture an early idea without a full implementation plan yet
+labels:
+  - idea
+body:
+  - type: input
+    id: headline
+    attributes:
+      label: Idea headline
+      placeholder: Add lightweight mobile companion app
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Keep it short and concrete.
+    validations:
+      required: true
+  - type: textarea
+    id: rough_direction
+    attributes:
+      label: Rough direction
+      description: Describe the first version you imagine.
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints or unknowns
+      description: Dependencies, risks, policy concerns, open questions.

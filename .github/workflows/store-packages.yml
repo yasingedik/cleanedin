@@ -1,0 +1,48 @@
+name: store-packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Read extension version
+        id: version
+        run: echo "value=$(node -e \"console.log(require('./manifest.json').version)\")" >> \"$GITHUB_OUTPUT\"
+
+      - name: Build store zip packages
+        run: |
+          mkdir -p artifacts
+          cp -R dist artifacts/cleanedin-chrome
+          cp -R dist artifacts/cleanedin-edge
+
+          (
+            cd artifacts/cleanedin-chrome
+            zip -r "../cleanedin-chrome-v${{ steps.version.outputs.value }}.zip" .
+          )
+
+          (
+            cd artifacts/cleanedin-edge
+            zip -r "../cleanedin-edge-v${{ steps.version.outputs.value }}.zip" .
+          )
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cleanedin-store-packages-v${{ steps.version.outputs.value }}
+          path: |
+            artifacts/cleanedin-chrome-v${{ steps.version.outputs.value }}.zip
+            artifacts/cleanedin-edge-v${{ steps.version.outputs.value }}.zip

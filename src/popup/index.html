@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CleanedIn</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header class="hero">
+        <h1>CleanedIn</h1>
+        <p>Compact controls. Category filters use <strong>Show / Hide</strong>. Value filters use <strong>Off / Hide</strong>.</p>
+      </header>
+
+      <details class="card tight section" data-section-key="power">
+        <summary class="section-summary">
+          <h2>Power</h2>
+        </summary>
+        <div class="power-grid">
+          <label class="row">
+            <span>🛡️ Enable filtering</span>
+            <input id="enabled" type="checkbox" />
+          </label>
+          <label class="row">
+            <span>🏷️ Show hidden badge</span>
+            <input id="showBadgeOnHidden" type="checkbox" />
+          </label>
+          <label class="row">
+            <span>🧪 Debug mode</span>
+            <input id="debug" type="checkbox" />
+          </label>
+        </div>
+      </details>
+
+      <details class="card tight section" data-section-key="categories" open>
+        <summary class="section-summary">
+          <h2>Categories</h2>
+        </summary>
+        <div id="categories" class="category-grid"></div>
+      </details>
+
+      <details class="card tight section" data-section-key="identity">
+        <summary class="section-summary">
+          <h2>Identity Filters</h2>
+        </summary>
+        <div class="compact-grid">
+          <section class="subcard">
+            <div class="row row-center">
+              <h3>Names</h3>
+              <button id="hiddenNamesAction" type="button" class="action-switch" data-action-switch="1" data-action-model="value">
+                Off
+              </button>
+            </div>
+            <textarea id="hiddenNames" rows="3" placeholder="acme inc&#10;john doe"></textarea>
+          </section>
+
+          <section class="subcard">
+            <h3>Connection Levels</h3>
+            <div id="connectionLevelActions" class="identity-action-grid"></div>
+          </section>
+
+          <section class="subcard">
+            <h3>Profile Types</h3>
+            <div id="profileTypeActions" class="identity-action-grid"></div>
+          </section>
+        </div>
+      </details>
+
+      <details class="card tight section" data-section-key="keywords">
+        <summary class="section-summary">
+          <h2>Keywords & Age</h2>
+        </summary>
+        <div class="compact-grid">
+          <section class="subcard">
+            <div class="row row-center">
+              <h3>Include Keywords</h3>
+              <button
+                id="includeKeywordsAction"
+                type="button"
+                class="action-switch"
+                data-action-switch="1"
+                data-action-model="value"
+              >
+                Off
+              </button>
+            </div>
+            <textarea id="includeKeywords" rows="3" placeholder="cloud&#10;startup"></textarea>
+          </section>
+
+          <section class="subcard">
+            <div class="row row-center">
+              <h3>Exclude Keywords</h3>
+              <button
+                id="excludeKeywordsAction"
+                type="button"
+                class="action-switch"
+                data-action-switch="1"
+                data-action-model="value"
+              >
+                Off
+              </button>
+            </div>
+            <textarea id="excludeKeywords" rows="3" placeholder="politics&#10;crypto"></textarea>
+          </section>
+
+          <section class="subcard">
+            <div class="row row-center">
+              <h3>Age (days)</h3>
+              <button id="ageAction" type="button" class="action-switch" data-action-switch="1" data-action-model="value">Off</button>
+            </div>
+            <input id="maxAgeDays" type="number" min="1" step="1" />
+          </section>
+        </div>
+      </details>
+
+      <details class="card tight section" data-section-key="data">
+        <summary class="section-summary">
+          <h2>Data</h2>
+        </summary>
+        <div class="row controls">
+          <button id="exportBtn" type="button">Export</button>
+          <button id="importBtn" type="button">Import</button>
+          <input id="importFile" type="file" accept="application/json" hidden />
+        </div>
+      </details>
+
+      <details class="card tight section" data-section-key="support" open>
+        <summary class="section-summary">
+          <h2>Support CleanedIn</h2>
+        </summary>
+        <div id="donationLinks" class="donation-links"></div>
+      </details>
+
+      <p id="status" class="status" aria-live="polite"></p>
+    </main>
+
+    <script type="module" src="./index.ts"></script>
+  </body>
+</html>

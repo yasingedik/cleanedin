@@ -1,0 +1,51 @@
+name: Bug Report
+description: Report a reproducible bug
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please provide a minimal, reproducible report.
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      description: Chrome or Edge + version
+      placeholder: Chrome 132
+    validations:
+      required: true
+  - type: input
+    id: extension_version
+    attributes:
+      label: Extension version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open LinkedIn feed
+        2. Enable X filter
+        3. Observe Y
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, console logs, or DOM snippets

@@ -1,0 +1,34 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+labels:
+  - enhancement
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: Feature summary
+      placeholder: Add configurable default profile
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the expected behavior and UI/API shape
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: impact
+    attributes:
+      label: Risks and tradeoffs

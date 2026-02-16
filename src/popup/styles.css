@@ -1,0 +1,371 @@
+:root {
+  color-scheme: light;
+  --bg-base: #eef3f8;
+  --bg-accent: #dce9f8;
+  --card-bg: #ffffff;
+  --card-border: #c8d6e6;
+  --text-main: #1b2a3a;
+  --text-soft: #4f6378;
+  --action: #0a66c2;
+  --action-hover: #0758ab;
+  --chip-bg: #f4f8fd;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 328px;
+  background:
+    radial-gradient(circle at 10% -5%, #ffffff 0%, rgba(255, 255, 255, 0) 44%),
+    radial-gradient(circle at 90% 0%, #d7e8ff 0%, rgba(215, 232, 255, 0) 34%),
+    linear-gradient(165deg, var(--bg-base), var(--bg-accent));
+  color: var(--text-main);
+  font: 500 11px/1.25 'Trebuchet MS', 'Avenir Next', Verdana, sans-serif;
+}
+
+.popup {
+  padding: 8px;
+}
+
+.hero {
+  margin: 0 0 6px;
+  padding: 8px 9px;
+  border: 1px solid #b8cae0;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #f7fbff, #e8f2ff);
+}
+
+h1 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+.hero p {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: 10px;
+}
+
+h2,
+h3 {
+  margin: 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 9px;
+  padding: 6px;
+  margin-bottom: 6px;
+  box-shadow: 0 1px 0 rgba(18, 40, 65, 0.05);
+}
+
+.card.tight {
+  padding: 6px;
+}
+
+.section summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.section summary::-webkit-details-marker {
+  display: none;
+}
+
+.section summary::after {
+  content: '▸';
+  color: #527096;
+  font-size: 11px;
+  transform: rotate(0deg);
+  transition: transform 120ms ease;
+}
+
+.section[open] summary::after {
+  transform: rotate(90deg);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.row.row-center {
+  align-items: center;
+}
+
+.power-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.inline-label {
+  color: var(--text-soft);
+  font-size: 9px;
+}
+
+.section-inline {
+  margin-top: 6px;
+}
+
+.compact-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.category-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.category-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 5px;
+  border: 1px solid #d4dfeb;
+  border-radius: 7px;
+  background: var(--chip-bg);
+}
+
+.identity-action-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.identity-action-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 5px;
+  border: 1px solid #d4dfeb;
+  border-radius: 7px;
+  background: #f9fcff;
+}
+
+.category-label {
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.subcard {
+  border: 1px solid #d4dfeb;
+  border-radius: 7px;
+  background: var(--chip-bg);
+  padding: 5px;
+}
+
+.chips {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.chips label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #d4dfeb;
+  border-radius: 6px;
+  padding: 4px 5px;
+  background: #f9fcff;
+}
+
+textarea,
+input[type='number'] {
+  width: 100%;
+  border: 1px solid #b9cbde;
+  border-radius: 6px;
+  padding: 5px 6px;
+  font: inherit;
+  background: #fff;
+  color: var(--text-main);
+  margin-top: 5px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+textarea:focus,
+input[type='number']:focus {
+  outline: 2px solid rgba(10, 102, 194, 0.18);
+  border-color: var(--action);
+}
+
+button {
+  appearance: none;
+  border: 1px solid var(--action);
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: var(--action);
+  color: white;
+  cursor: pointer;
+  font: 600 10px/1 'Trebuchet MS', 'Avenir Next', Verdana, sans-serif;
+  transition: background-color 120ms ease;
+}
+
+button:hover {
+  background: var(--action-hover);
+}
+
+.action-switch {
+  position: relative;
+  width: 64px;
+  min-width: 64px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid #aeb7c2;
+  background: #e4e8ee;
+  color: #2f3c4d;
+  overflow: hidden;
+}
+
+.action-switch::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 30, 48, 0.25);
+  transition: transform 140ms ease;
+}
+
+.action-switch.action-off {
+  border-color: #adb8c5;
+  background: #e6ebf1;
+  color: #2f3c4d;
+  justify-content: flex-end;
+}
+
+.action-switch.action-show {
+  border-color: #adb8c5;
+  background: #e6ebf1;
+  color: #2f3c4d;
+  justify-content: flex-end;
+}
+
+.action-switch.action-hide {
+  border-color: #cf5566;
+  background: #e85a6a;
+  color: #fff;
+  justify-content: flex-start;
+}
+
+.action-switch.action-hide::before {
+  transform: translateX(41px);
+}
+
+.controls {
+  justify-content: flex-start;
+}
+
+.status {
+  min-height: 14px;
+  margin: 0;
+  color: #204e80;
+  font-size: 10px;
+}
+
+.donation-links {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.donation-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid #c7d8ea;
+  border-radius: 7px;
+  text-decoration: none;
+  color: #163a5f;
+  background: #f7fbff;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    transform 120ms ease;
+}
+
+.donation-link:hover {
+  border-color: var(--action);
+  background: #edf5ff;
+  transform: translateY(-1px);
+}
+
+.donation-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
+
+.donation-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.donation-text span {
+  font-weight: 700;
+  font-size: 10px;
+}
+
+.donation-text small {
+  color: var(--text-soft);
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+.support-empty {
+  margin: 0;
+  color: #5a6673;
+  font-size: 10px;
+}
+
+@media (max-width: 420px) {
+  body {
+    min-width: 306px;
+  }
+
+  .compact-grid,
+  .donation-links,
+  .category-grid {
+    grid-template-columns: 1fr;
+  }
+}

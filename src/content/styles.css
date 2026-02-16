@@ -1,0 +1,68 @@
+.cleanedin-hidden {
+  display: none !important;
+}
+
+.cleanedin-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  border-radius: 8px;
+  border: 1px solid #cfd8e3;
+  background: #f6f8fb;
+  color: #23313f;
+  font: 600 12px/1.2 "Segoe UI", Tahoma, sans-serif;
+}
+
+.cleanedin-badge[data-cleanedin-tone="ad"] {
+  border-color: #d2996b;
+  background: #fff4ea;
+}
+
+.cleanedin-badge[data-cleanedin-tone="suggested"] {
+  border-color: #91a8cb;
+  background: #edf4ff;
+}
+
+.cleanedin-badge[data-cleanedin-tone="reaction"] {
+  border-color: #9a8ec9;
+  background: #f4f0ff;
+}
+
+.cleanedin-badge[data-cleanedin-tone="connection"] {
+  border-color: #6f9aa0;
+  background: #edf8fa;
+}
+
+.cleanedin-badge[data-cleanedin-tone="profile"] {
+  border-color: #93a0b9;
+  background: #f2f5fb;
+}
+
+.cleanedin-badge[data-cleanedin-tone="keyword"] {
+  border-color: #b28a58;
+  background: #fff6eb;
+}
+
+.cleanedin-badge[data-cleanedin-tone="name"] {
+  border-color: #7a9f86;
+  background: #eef9f1;
+}
+
+.cleanedin-badge[data-cleanedin-tone="age"] {
+  border-color: #be8f66;
+  background: #fff3e8;
+}
+
+.cleanedin-badge button {
+  appearance: none;
+  border: 0;
+  border-radius: 6px;
+  background: #0a66c2;
+  color: white;
+  font: 600 12px/1.2 "Segoe UI", Tahoma, sans-serif;
+  padding: 6px 9px;
+  cursor: pointer;
+}
