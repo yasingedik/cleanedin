@@ -1,16 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FeedObserver } from '../../../src/content/observer';
 
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+async function flushObserverTimers(): Promise<void> {
+  await Promise.resolve();
+  await vi.runAllTimersAsync();
 }
 
 afterEach(() => {
   document.body.innerHTML = '';
+  vi.useRealTimers();
 });
 
 describe('FeedObserver', () => {
   it('attaches when feed root appears after start', async () => {
+    vi.useFakeTimers();
     const onPosts = vi.fn<(roots: HTMLElement[]) => void>();
 
     const observer = new FeedObserver({
@@ -26,7 +29,7 @@ describe('FeedObserver', () => {
       main.innerHTML = '<div id="feed-root"><article data-urn="urn:li:activity:1"></article></div>';
       document.body.appendChild(main);
 
-      await wait(60);
+      await flushObserverTimers();
 
       expect(onPosts).toHaveBeenCalled();
       const roots = onPosts.mock.calls.at(-1)?.[0] ?? [];
@@ -37,6 +40,7 @@ describe('FeedObserver', () => {
   });
 
   it('reattaches when root detaches and a new root is mounted', async () => {
+    vi.useFakeTimers();
     const onPosts = vi.fn<(roots: HTMLElement[]) => void>();
 
     const observer = new FeedObserver({
@@ -51,7 +55,7 @@ describe('FeedObserver', () => {
       document.body.appendChild(firstMain);
 
       observer.start();
-      await wait(60);
+      await flushObserverTimers();
 
       firstMain.remove();
 
@@ -59,7 +63,7 @@ describe('FeedObserver', () => {
       secondMain.innerHTML = '<div id="feed-root"><article data-urn="urn:li:activity:second"></article></div>';
       document.body.appendChild(secondMain);
 
-      await wait(60);
+      await flushObserverTimers();
 
       const allObserved = onPosts.mock.calls.flatMap((call) => call[0]).map((root) => root.getAttribute('data-urn'));
       expect(allObserved).toContain('urn:li:activity:first');
