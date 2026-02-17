@@ -195,6 +195,46 @@ describe('render temporary reveal lifecycle', () => {
 
 
 describe('floating options panel', () => {
+
+
+  it('mounts inside the rail that contains LinkedIn shortcut cards', () => {
+    const originalChrome = globalThis.chrome;
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
+        runtime: {
+          getURL: (path: string) => `chrome-extension://test/${path}`
+        }
+      }
+    });
+
+    const main = document.createElement('main');
+    const wrongAside = document.createElement('aside');
+    wrongAside.className = 'scaffold-layout__aside';
+
+    const targetAside = document.createElement('aside');
+    targetAside.className = 'scaffold-layout__aside';
+    targetAside.innerHTML = `
+      <div class="artdeco-card"></div>
+      <a href="https://www.linkedin.com/groups/">Groups</a>
+      <a href="https://www.linkedin.com/events/">Events</a>
+      <a href="https://www.linkedin.com/newsletters/">Newsletters</a>
+    `;
+
+    main.append(wrongAside, targetAside);
+    document.body.appendChild(main);
+
+    ensureFloatingOptionsPanel();
+
+    expect(targetAside.querySelector('#cleanedin-floating-options')).not.toBeNull();
+    expect(wrongAside.querySelector('#cleanedin-floating-options')).toBeNull();
+
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: originalChrome
+    });
+  });
+
   it('mounts the options panel and persists visibility toggle state', () => {
     const originalChrome = globalThis.chrome;
     Object.defineProperty(globalThis, 'chrome', {

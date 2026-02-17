@@ -32,6 +32,24 @@ function persistFloatingPanelVisibility(visible: boolean): void {
   }
 }
 
+function getRailScore(candidate: HTMLElement): number {
+  const rect = candidate.getBoundingClientRect();
+  const cardCount = candidate.querySelectorAll('.artdeco-card, .feed-identity-module, .premium-upsell-link').length;
+  const shortcutCount = candidate.querySelectorAll('a[href*="/groups"], a[href*="/events"], a[href*="/newsletters"], a[href*="/mynetwork"]').length;
+
+  let score = 0;
+  score += shortcutCount * 25;
+  score += Math.min(cardCount, 10) * 4;
+  if (rect.left >= window.innerWidth * 0.35) {
+    score += 10;
+  }
+  if (rect.width >= 220 && rect.width <= 420) {
+    score += 8;
+  }
+
+  return score;
+}
+
 function resolveLinkedInLeftRailHost(): HTMLElement | null {
   const candidates = [
     ...document.querySelectorAll<HTMLElement>('main .scaffold-layout__aside'),
@@ -43,12 +61,7 @@ function resolveLinkedInLeftRailHost(): HTMLElement | null {
     return null;
   }
 
-  return (
-    candidates.find((candidate) => {
-      const rect = candidate.getBoundingClientRect();
-      return rect.left < window.innerWidth / 2;
-    }) ?? candidates[0]
-  );
+  return [...candidates].sort((a, b) => getRailScore(b) - getRailScore(a))[0] ?? null;
 }
 
 function getFloatingPanelRoot(): HTMLElement {
@@ -406,7 +419,7 @@ export function ensureFloatingOptionsPanel(): void {
   const railHost = resolveLinkedInLeftRailHost();
 
   if (railHost) {
-    railHost.prepend(panel);
+    railHost.append(panel);
     panel.dataset.mount = 'rail';
     return;
   }
