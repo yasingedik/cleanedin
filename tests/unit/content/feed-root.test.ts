@@ -102,4 +102,31 @@ describe('feed root detection', () => {
     expect(actionRows.length).toBe(0);
     expect(articleRoots.length).toBeGreaterThan(0);
   });
+
+  it('keeps long tracked feed-update containers as post roots', () => {
+    const longCommentText = 'comment '.repeat(2200);
+
+    document.body.innerHTML = `
+      <main>
+        <div data-testid="mainFeed">
+          <div id="tracked-post" data-view-tracking-scope='[{"breadcrumbType":"FEED_UPDATE_SERVED"}]'>
+            <div data-view-name="feed-full-update">
+              <a href="/in/mike-piccolo">Mike Piccolo</a>
+              <span> • Following</span>
+              <time>9h</time>
+              <p>${longCommentText}</p>
+              <button aria-label="Like">Like</button>
+              <button aria-label="Comment">Comment</button>
+              <button aria-label="Repost">Repost</button>
+            </div>
+          </div>
+        </div>
+      </main>
+    `;
+
+    const feedRoot = resolveFeedRoot(document);
+    const roots = findPostRoots(feedRoot as HTMLElement);
+
+    expect(roots.some((root) => root.id === 'tracked-post')).toBe(true);
+  });
 });

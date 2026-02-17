@@ -116,16 +116,19 @@ function isLikelyPostContainer(root: HTMLElement): boolean {
     return true;
   }
 
+  const hasFeedTracking = hasFeedTrackingSignal(root);
+  const isArticleLike = root.matches('article, [role="article"]');
   const textLength = (root.textContent ?? '').trim().length;
   if (textLength < 40) {
     return false;
   }
 
-  if (textLength > 12_000) {
+  // Expanded comment threads can produce very long tracked post containers.
+  // Keep rejecting oversized generic wrappers, but allow tracked/article roots.
+  if (textLength > 12_000 && !hasFeedTracking && !isArticleLike) {
     return false;
   }
 
-  const hasFeedTracking = hasFeedTrackingSignal(root);
   const hasTime = Boolean(root.querySelector('time'));
   const hasActor =
     Boolean(root.querySelector('a[href*="/in/"]')) ||
@@ -143,7 +146,6 @@ function isLikelyPostContainer(root: HTMLElement): boolean {
     Boolean(root.querySelector('video')) ||
     Boolean(root.querySelector('iframe')) ||
     Boolean(root.querySelector('[aria-roledescription="carousel"]'));
-  const isArticleLike = root.matches('article, [role="article"]');
 
   if (isArticleLike && textLength >= 80 && (hasActor || hasTime || hasUpdateLink)) {
     return true;
