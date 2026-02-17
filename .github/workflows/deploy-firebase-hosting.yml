@@ -1,0 +1,48 @@
+name: deploy-firebase-hosting
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/cleanedin/**'
+      - 'firebase.json'
+      - '.github/workflows/deploy-firebase-hosting.yml'
+
+concurrency:
+  group: firebase-hosting-live
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Firebase secrets
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$FIREBASE_PROJECT_ID" ]; then
+            echo "Missing required secret: FIREBASE_PROJECT_ID"
+            exit 1
+          fi
+
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "Missing required secret: FIREBASE_SERVICE_ACCOUNT"
+            exit 1
+          fi
+
+      - name: Deploy to Firebase Hosting (live)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+          channelId: live

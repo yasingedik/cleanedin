@@ -19,5 +19,9 @@
    - `cleanedin-chrome-vX.Y.Z.zip`
    - `cleanedin-edge-vX.Y.Z.zip`
 6. Upload each zip to the relevant extension store submission form.
-7. Verify privacy policy URL in both store listings points to `docs/privacy-policy.html` (hosted via GitHub Pages).
-8. Update changelog and release notes.
+7. Verify store listing legal URLs:
+   - Privacy policy: `https://cleanedin.yasingedik.com/privacy-policy.html`
+   - Terms of service: `https://cleanedin.yasingedik.com/terms-of-service.html`
+8. Verify `deploy-firebase-hosting` workflow succeeded on `main` for website/legal page changes.
+9. Verify landing page is live at `https://cleanedin.yasingedik.com/`.
+10. Update changelog and release notes.

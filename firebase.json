@@ -1,0 +1,80 @@
+{
+  "hosting": {
+    "public": "docs/cleanedin",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "redirects": [
+      {
+        "source": "/privacy",
+        "destination": "/privacy-policy.html",
+        "type": 301
+      },
+      {
+        "source": "/terms",
+        "destination": "/terms-of-service.html",
+        "type": 301
+      },
+      {
+        "source": "/cleanedin",
+        "destination": "/",
+        "type": 301
+      },
+      {
+        "source": "/cleanedin/",
+        "destination": "/",
+        "type": 301
+      },
+      {
+        "source": "/cleanedin/privacy",
+        "destination": "/privacy-policy.html",
+        "type": 301
+      },
+      {
+        "source": "/cleanedin/terms",
+        "destination": "/terms-of-service.html",
+        "type": 301
+      },
+      {
+        "source": "/cleanedin/privacy-policy.html",
+        "destination": "/privacy-policy.html",
+        "type": 301
+      },
+      {
+        "source": "/cleanedin/terms-of-service.html",
+        "destination": "/terms-of-service.html",
+        "type": 301
+      }
+    ],
+    "headers": [
+      {
+        "source": "/**/*.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public,max-age=600"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          }
+        ]
+      },
+      {
+        "source": "/**/*.css",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public,max-age=86400"
+          }
+        ]
+      }
+    ]
+  }
+}

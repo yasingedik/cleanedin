@@ -80,15 +80,27 @@ npm run test:e2e
 
 Release steps are documented in `docs/release-checklist.md`.
 
-## Privacy Policy
+## Website + Legal Pages
 
-- Privacy policy page: `docs/privacy-policy.html`
-- Recommended hosted URL (GitHub Pages): `https://<github-username>.github.io/<repo-name>/privacy-policy.html`
-- This extension does not collect or transmit browsing data to developer servers.
-- To host from GitHub:
-  1. Open repository **Settings** -> **Pages**.
-  2. Under **Build and deployment**, choose **Deploy from a branch**.
-  3. Select branch `main` and folder `/docs`, then **Save**.
+- Landing page: `docs/cleanedin/index.html`
+- Privacy policy: `docs/cleanedin/privacy-policy.html`
+- Terms of service: `docs/cleanedin/terms-of-service.html`
+- Target hosted URLs:
+  - `https://cleanedin.yasingedik.com/`
+  - `https://cleanedin.yasingedik.com/privacy-policy.html`
+  - `https://cleanedin.yasingedik.com/terms-of-service.html`
+- Legacy privacy page kept for compatibility: `docs/privacy-policy.html`
+
+## Firebase Hosting
+
+- Hosting config: `firebase.json`
+- Project alias template: `.firebaserc.example`
+- Deployment guide: `docs/firebase-hosting.md`
+- Auto-deploy workflow: `.github/workflows/deploy-firebase-hosting.yml`
+- Required GitHub secrets:
+  - `FIREBASE_PROJECT_ID`
+  - `FIREBASE_SERVICE_ACCOUNT`
+- Recommended Firebase project setup: dedicated project/site for `cleanedin.yasingedik.com`
 
 ## Repository Layout
 

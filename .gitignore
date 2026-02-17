@@ -11,6 +11,7 @@ resources/real/
 # Local secret material / signing artifacts
 .env
 .env.*
+.firebaserc
 *.pem
 *.key
 *.p12
@@ -18,3 +19,5 @@ resources/real/
 *.crt
 *.cer
 *.mobileprovision
+
+firebase-debug.log
