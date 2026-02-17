@@ -66,6 +66,21 @@ async function setCheckedIfChanged(popup: Page, selector: string, checked: boole
   await waitForSave(popup);
 }
 
+async function waitForFeedProcessing(feed: Page): Promise<void> {
+  await expect
+    .poll(async () => feed.evaluate(() => document.documentElement?.getAttribute('data-cleanedin-content-boot') ?? ''), {
+      timeout: 10000
+    })
+    .toBe('1');
+
+  await expect
+    .poll(
+      async () => feed.evaluate(() => Number(document.documentElement?.getAttribute('data-cleanedin-observed-posts') ?? '0')),
+      { timeout: 15000 }
+    )
+    .toBeGreaterThan(0);
+}
+
 test('show/hide action switches control filtering and temporary reveal works end-to-end', async () => {
   const server = await startFixtureServer();
   const session = await launchExtensionSession();
@@ -77,10 +92,12 @@ test('show/hide action switches control filtering and temporary reveal works end
     await popup.locator('button[data-category="ad"]').waitFor();
     await setCheckedIfChanged(popup, '#enabled', true);
 
+    await setCategoryActions(popup, { ad: 'Show' });
     await setCategoryActions(popup, { ad: 'Hide' });
 
     const feed = await session.context.newPage();
     await feed.goto(`${server.baseUrl}/feed`);
+    await waitForFeedProcessing(feed);
 
     await expect(feed.locator('#post-ad')).toHaveClass(/cleanedin-hidden/);
     await expect(feed.locator('#post-video')).not.toHaveClass(/cleanedin-hidden/);

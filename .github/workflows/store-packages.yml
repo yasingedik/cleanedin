@@ -22,7 +22,7 @@ jobs:
 
       - name: Read extension version
         id: version
-        run: echo "value=$(node -e \"console.log(require('./manifest.json').version)\")" >> \"$GITHUB_OUTPUT\"
+        run: echo "value=$(jq -r '.version' manifest.json)" >> "$GITHUB_OUTPUT"
 
       - name: Build store zip packages
         run: |
