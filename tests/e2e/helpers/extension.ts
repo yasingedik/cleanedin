@@ -5,6 +5,9 @@ import { chromium, type BrowserContext } from '@playwright/test';
 
 type Manifest = {
   host_permissions?: string[];
+  action?: {
+    default_popup?: string;
+  };
   content_scripts?: Array<{
     matches: string[];
     js: string[];
@@ -23,7 +26,12 @@ function uniqueEntries(values: string[]): string[] {
   return [...new Set(values)];
 }
 
-function buildTestExtensionDir(): { extensionPath: string; userDataDir: string; cleanup: () => void } {
+function buildTestExtensionDir(): {
+  extensionPath: string;
+  userDataDir: string;
+  popupPath: string;
+  cleanup: () => void;
+} {
   const distPath = resolve('dist');
   if (!existsSync(distPath)) {
     throw new Error('dist/ not found. Run `npm run build` before e2e tests.');
@@ -46,10 +54,12 @@ function buildTestExtensionDir(): { extensionPath: string; userDataDir: string; 
   }));
 
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+  const popupPath = (manifest.action?.default_popup ?? 'popup.html').replace(/^\/+/, '');
 
   return {
     extensionPath,
     userDataDir,
+    popupPath,
     cleanup: () => {
       rmSync(extensionPath, { recursive: true, force: true });
       rmSync(userDataDir, { recursive: true, force: true });
@@ -58,7 +68,7 @@ function buildTestExtensionDir(): { extensionPath: string; userDataDir: string; 
 }
 
 export async function launchExtensionSession(): Promise<ExtensionSession> {
-  const { extensionPath, userDataDir, cleanup } = buildTestExtensionDir();
+  const { extensionPath, userDataDir, popupPath, cleanup } = buildTestExtensionDir();
 
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
@@ -75,7 +85,7 @@ export async function launchExtensionSession(): Promise<ExtensionSession> {
   return {
     context,
     extensionId,
-    popupUrl: `chrome-extension://${extensionId}/popup.html`,
+    popupUrl: `chrome-extension://${extensionId}/${popupPath}`,
     close: async () => {
       await context.close();
       cleanup();

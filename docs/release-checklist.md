@@ -1,8 +1,11 @@
 # Release Checklist
 
-1. Verify version values:
-   - `manifest.json`
-   - `package.json`
+1. Bump version with one command:
+   - patch: `npm run release:patch`
+   - minor: `npm run release:minor`
+   - major: `npm run release:major`
+   - exact version: `npm run release -- 0.1.1`
+   - This updates `package.json`, syncs `manifest.json`, creates a commit, and creates tag `vX.Y.Z`.
 2. Run quality checks:
    - `npm run lint`
    - `npm run typecheck`
@@ -10,7 +13,8 @@
    - `npm run test:fixtures`
    - `npm run build`
 3. Smoke test in Chrome + Edge with unpacked `dist/`.
-4. Create a git tag `vX.Y.Z` and push it.
+4. Push release commit + tag:
+   - `git push origin main --follow-tags`
 5. Download store packages from the `store-packages` workflow artifact:
    - `cleanedin-chrome-vX.Y.Z.zip`
    - `cleanedin-edge-vX.Y.Z.zip`

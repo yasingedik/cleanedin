@@ -32,7 +32,12 @@
     "test": "vitest run tests/unit",
     "test:fixtures": "vitest run tests/fixtures",
     "test:e2e": "playwright test",
-    "test:e2e:install": "playwright install chromium"
+    "test:e2e:install": "playwright install chromium",
+    "version": "node scripts/sync-manifest-version.mjs && git add manifest.json",
+    "release": "npm version",
+    "release:patch": "npm version patch",
+    "release:minor": "npm version minor",
+    "release:major": "npm version major"
   },
   "devDependencies": {
     "@playwright/test": "^1.51.0",
