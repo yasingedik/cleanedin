@@ -80,6 +80,16 @@ npm run test:e2e
 
 Release steps are documented in `docs/release-checklist.md`.
 
+## Privacy Policy
+
+- Privacy policy page: `docs/privacy-policy.html`
+- Recommended hosted URL (GitHub Pages): `https://<github-username>.github.io/<repo-name>/privacy-policy.html`
+- This extension does not collect or transmit browsing data to developer servers.
+- To host from GitHub:
+  1. Open repository **Settings** -> **Pages**.
+  2. Under **Build and deployment**, choose **Deploy from a branch**.
+  3. Select branch `main` and folder `/docs`, then **Save**.
+
 ## Repository Layout
 
 - `src/background/`: service worker

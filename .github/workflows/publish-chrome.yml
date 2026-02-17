@@ -1,0 +1,132 @@
+name: publish-chrome
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_review:
+        description: 'Set true to request skipReview (fails if ineligible)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      dry_run:
+        description: 'Only upload package; do not call publish endpoint'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Package extension for Chrome
+        run: |
+          cd dist
+          zip -r ../cleanedin-chrome.zip .
+
+      - name: Exchange refresh token for access token
+        id: auth
+        run: |
+          set -euo pipefail
+
+          token_response="$(curl -sS --fail-with-body \
+            -X POST https://oauth2.googleapis.com/token \
+            -d "client_id=${{ secrets.CWS_CLIENT_ID }}" \
+            -d "client_secret=${{ secrets.CWS_CLIENT_SECRET }}" \
+            -d "refresh_token=${{ secrets.CWS_REFRESH_TOKEN }}" \
+            -d "grant_type=refresh_token")"
+
+          access_token="$(echo "$token_response" | jq -r '.access_token // empty')"
+
+          if [ -z "$access_token" ]; then
+            echo "Failed to obtain Chrome Web Store access token."
+            echo "$token_response"
+            exit 1
+          fi
+
+          echo "::add-mask::$access_token"
+          echo "access_token=$access_token" >> "$GITHUB_OUTPUT"
+
+      - name: Upload package to Chrome Web Store
+        run: |
+          set -euo pipefail
+
+          upload_url="https://chromewebstore.googleapis.com/upload/v2/publishers/${{ secrets.CWS_PUBLISHER_ID }}/items/${{ secrets.CWS_EXTENSION_ID }}:upload"
+
+          upload_response="$(curl -sS --fail-with-body \
+            -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
+            -X POST \
+            -T cleanedin-chrome.zip \
+            "$upload_url")"
+
+          echo "$upload_response" > chrome-upload-response.json
+          cat chrome-upload-response.json
+
+          upload_state="$(jq -r '.uploadState // empty' chrome-upload-response.json)"
+          if [ "$upload_state" = "FAILURE" ]; then
+            echo "Chrome upload failed."
+            exit 1
+          fi
+
+      - name: Publish item in Chrome Web Store
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
+        run: |
+          set -euo pipefail
+
+          publish_url="https://chromewebstore.googleapis.com/v2/publishers/${{ secrets.CWS_PUBLISHER_ID }}/items/${{ secrets.CWS_EXTENSION_ID }}:publish"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.skip_review }}" == "true" ]]; then
+            publish_body='{"skipReview":true}'
+          else
+            publish_body='{}'
+          fi
+
+          publish_response="$(curl -sS --fail-with-body \
+            -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
+            -H "Content-Type: application/json" \
+            -X POST \
+            -d "$publish_body" \
+            "$publish_url")"
+
+          echo "$publish_response" > chrome-publish-response.json
+          cat chrome-publish-response.json
+
+          publish_state="$(jq -r '.state // empty' chrome-publish-response.json)"
+          if [ -z "$publish_state" ]; then
+            echo "Chrome publish response missing state."
+            exit 1
+          fi
+
+      - name: Fetch final Chrome item status
+        run: |
+          set -euo pipefail
+
+          status_url="https://chromewebstore.googleapis.com/v2/publishers/${{ secrets.CWS_PUBLISHER_ID }}/items/${{ secrets.CWS_EXTENSION_ID }}:fetchStatus"
+
+          status_response="$(curl -sS --fail-with-body \
+            -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
+            -X GET \
+            "$status_url")"
+
+          echo "$status_response" > chrome-status-response.json
+          cat chrome-status-response.json

@@ -1,0 +1,214 @@
+name: publish-edge
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only upload package; do not call publish endpoint'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      publish_notes:
+        description: 'Optional certification notes sent in publish request body'
+        required: false
+        default: ''
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      EDGE_API_ROOT: https://api.addons.microsoftedge.microsoft.com/v1.1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Package extension for Edge
+        run: |
+          cd dist
+          zip -r ../cleanedin-edge.zip .
+
+      - name: Upload package to Edge draft submission
+        id: upload
+        run: |
+          set -euo pipefail
+
+          upload_url="${EDGE_API_ROOT}/products/${{ secrets.EDGE_PRODUCT_ID }}/submissions/draft/package"
+
+          http_code="$(curl -sS -D edge-upload-headers.txt -o edge-upload-body.json -w '%{http_code}' \
+            -H "Authorization: ApiKey ${{ secrets.EDGE_API_KEY }}" \
+            -H "X-ClientID: ${{ secrets.EDGE_CLIENT_ID }}" \
+            -H "Content-Type: application/zip" \
+            -X POST \
+            -T cleanedin-edge.zip \
+            "$upload_url")"
+
+          echo "Upload HTTP status: $http_code"
+          cat edge-upload-body.json || true
+
+          if [ "$http_code" != "202" ]; then
+            echo "Edge upload request failed."
+            cat edge-upload-headers.txt || true
+            exit 1
+          fi
+
+          location_header="$(awk 'tolower($1)=="location:" {print $2}' edge-upload-headers.txt | tr -d '\r' | tail -n 1)"
+          if [ -z "$location_header" ]; then
+            echo "Upload succeeded but Location header is missing."
+            cat edge-upload-headers.txt || true
+            exit 1
+          fi
+
+          upload_operation_id="${location_header##*/}"
+          if [ -z "$upload_operation_id" ]; then
+            echo "Failed to parse upload operation ID from Location header: $location_header"
+            exit 1
+          fi
+
+          echo "upload_operation_id=$upload_operation_id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for Edge upload operation
+        run: |
+          set -euo pipefail
+
+          operation_id="${{ steps.upload.outputs.upload_operation_id }}"
+          status_url="${EDGE_API_ROOT}/products/${{ secrets.EDGE_PRODUCT_ID }}/submissions/draft/package/operations/${operation_id}"
+
+          for attempt in $(seq 1 40); do
+            http_code="$(curl -sS -o edge-upload-status.json -w '%{http_code}' \
+              -H "Authorization: ApiKey ${{ secrets.EDGE_API_KEY }}" \
+              -H "X-ClientID: ${{ secrets.EDGE_CLIENT_ID }}" \
+              -X GET \
+              "$status_url")"
+
+            if [ "$http_code" != "200" ] && [ "$http_code" != "202" ]; then
+              echo "Unexpected status while polling upload operation: $http_code"
+              cat edge-upload-status.json || true
+              exit 1
+            fi
+
+            status="$(jq -r '.status // empty' edge-upload-status.json)"
+            echo "Upload operation status (attempt $attempt): $status"
+
+            if [ "$status" = "Succeeded" ]; then
+              cat edge-upload-status.json
+              exit 0
+            fi
+
+            if [ "$status" = "Failed" ]; then
+              echo "Edge upload operation failed."
+              cat edge-upload-status.json
+              exit 1
+            fi
+
+            sleep 8
+          done
+
+          echo "Timed out waiting for Edge upload operation to complete."
+          cat edge-upload-status.json || true
+          exit 1
+
+      - name: Publish Edge draft submission
+        id: publish
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
+        env:
+          PUBLISH_NOTES: ${{ github.event.inputs.publish_notes }}
+        run: |
+          set -euo pipefail
+
+          publish_url="${EDGE_API_ROOT}/products/${{ secrets.EDGE_PRODUCT_ID }}/submissions"
+          publish_notes="${PUBLISH_NOTES:-}"
+          if [ -z "$publish_notes" ]; then
+            publish_notes="Automated publish from GitHub Actions run ${{ github.run_id }}"
+          fi
+
+          publish_body="$(jq -n --arg notes "$publish_notes" '{notes: $notes}')"
+
+          http_code="$(curl -sS -D edge-publish-headers.txt -o edge-publish-body.json -w '%{http_code}' \
+            -H "Authorization: ApiKey ${{ secrets.EDGE_API_KEY }}" \
+            -H "X-ClientID: ${{ secrets.EDGE_CLIENT_ID }}" \
+            -H "Content-Type: application/json" \
+            -X POST \
+            --data "$publish_body" \
+            "$publish_url")"
+
+          echo "Publish HTTP status: $http_code"
+          cat edge-publish-body.json || true
+
+          if [ "$http_code" != "202" ]; then
+            echo "Edge publish request failed."
+            cat edge-publish-headers.txt || true
+            exit 1
+          fi
+
+          location_header="$(awk 'tolower($1)=="location:" {print $2}' edge-publish-headers.txt | tr -d '\r' | tail -n 1)"
+          if [ -z "$location_header" ]; then
+            echo "Publish request accepted but Location header is missing."
+            cat edge-publish-headers.txt || true
+            exit 1
+          fi
+
+          publish_operation_id="${location_header##*/}"
+          if [ -z "$publish_operation_id" ]; then
+            echo "Failed to parse publish operation ID from Location header: $location_header"
+            exit 1
+          fi
+
+          echo "publish_operation_id=$publish_operation_id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for Edge publish operation
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
+        run: |
+          set -euo pipefail
+
+          operation_id="${{ steps.publish.outputs.publish_operation_id }}"
+          status_url="${EDGE_API_ROOT}/products/${{ secrets.EDGE_PRODUCT_ID }}/submissions/operations/${operation_id}"
+
+          for attempt in $(seq 1 60); do
+            http_code="$(curl -sS -o edge-publish-status.json -w '%{http_code}' \
+              -H "Authorization: ApiKey ${{ secrets.EDGE_API_KEY }}" \
+              -H "X-ClientID: ${{ secrets.EDGE_CLIENT_ID }}" \
+              -X GET \
+              "$status_url")"
+
+            if [ "$http_code" != "200" ] && [ "$http_code" != "202" ]; then
+              echo "Unexpected status while polling publish operation: $http_code"
+              cat edge-publish-status.json || true
+              exit 1
+            fi
+
+            status="$(jq -r '.status // empty' edge-publish-status.json)"
+            echo "Publish operation status (attempt $attempt): $status"
+
+            if [ "$status" = "Succeeded" ]; then
+              cat edge-publish-status.json
+              exit 0
+            fi
+
+            if [ "$status" = "Failed" ]; then
+              echo "Edge publish operation failed."
+              cat edge-publish-status.json
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          echo "Timed out waiting for Edge publish operation to complete."
+          cat edge-publish-status.json || true
+          exit 1

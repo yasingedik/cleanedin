@@ -15,4 +15,5 @@
    - `cleanedin-chrome-vX.Y.Z.zip`
    - `cleanedin-edge-vX.Y.Z.zip`
 6. Upload each zip to the relevant extension store submission form.
-7. Update changelog and release notes.
+7. Verify privacy policy URL in both store listings points to `docs/privacy-policy.html` (hosted via GitHub Pages).
+8. Update changelog and release notes.
