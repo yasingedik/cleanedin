@@ -5,6 +5,10 @@ import { chromium, type BrowserContext } from '@playwright/test';
 
 type Manifest = {
   host_permissions?: string[];
+  web_accessible_resources?: Array<{
+    resources?: string[];
+    matches?: string[];
+  }>;
   action?: {
     default_popup?: string;
   };
@@ -51,6 +55,11 @@ function buildTestExtensionDir(): {
   manifest.content_scripts = (manifest.content_scripts ?? []).map((script) => ({
     ...script,
     matches: uniqueEntries([...(script.matches ?? []), ...testMatches])
+  }));
+
+  manifest.web_accessible_resources = (manifest.web_accessible_resources ?? []).map((resource) => ({
+    ...resource,
+    matches: uniqueEntries([...(resource.matches ?? []), ...testMatches])
   }));
 
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
