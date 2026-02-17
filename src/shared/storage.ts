@@ -14,6 +14,27 @@ const memoryStorage: { sync: Record<string, unknown>; local: Record<string, unkn
 };
 
 type StorageAreaName = 'sync' | 'local';
+const SYNC_STORAGE_KEYS = [...Object.keys(DEFAULT_SYNC_SETTINGS), 'mode', 'selectedCategories', 'unknownPolicy'];
+const LOCAL_STORAGE_KEYS = [
+  ...Object.keys(DEFAULT_LOCAL_SETTINGS),
+  'connectionLevels',
+  'connectionLevelsAction',
+  'profileTypes',
+  'profileTypesAction',
+  'mode',
+  'selectedCategories',
+  'unknownPolicy'
+];
+const LEGACY_SYNC_STORAGE_KEYS = ['mode', 'selectedCategories', 'unknownPolicy'];
+const LEGACY_LOCAL_STORAGE_KEYS = [
+  'mode',
+  'selectedCategories',
+  'unknownPolicy',
+  'connectionLevels',
+  'connectionLevelsAction',
+  'profileTypes',
+  'profileTypesAction'
+];
 
 type ChangeMap = Record<string, chrome.storage.StorageChange>;
 
@@ -49,6 +70,20 @@ function chromeSet(area: StorageAreaName, values: Record<string, unknown>): Prom
   });
 }
 
+function chromeRemove(area: StorageAreaName, keys: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    chrome.storage[area].remove(keys, () => {
+      const error = chrome.runtime.lastError;
+      if (error) {
+        reject(new Error(error.message));
+        return;
+      }
+
+      resolve();
+    });
+  });
+}
+
 async function getArea(area: StorageAreaName, keys: string[]): Promise<Record<string, unknown>> {
   if (!hasChromeStorage()) {
     const source = memoryStorage[area];
@@ -70,13 +105,28 @@ async function setArea(area: StorageAreaName, values: Record<string, unknown>): 
   await chromeSet(area, values);
 }
 
+async function removeAreaKeys(area: StorageAreaName, keys: string[]): Promise<void> {
+  if (keys.length === 0) {
+    return;
+  }
+
+  if (!hasChromeStorage()) {
+    for (const key of keys) {
+      delete memoryStorage[area][key];
+    }
+    return;
+  }
+
+  await chromeRemove(area, keys);
+}
+
 export async function getSyncSettings(): Promise<FilterSettingsSync> {
-  const raw = await getArea('sync', Object.keys(DEFAULT_SYNC_SETTINGS));
+  const raw = await getArea('sync', SYNC_STORAGE_KEYS);
   return migrateSyncSettings(raw as Partial<FilterSettingsSync>);
 }
 
 export async function getLocalSettings(): Promise<FilterSettingsLocal> {
-  const raw = await getArea('local', Object.keys(DEFAULT_LOCAL_SETTINGS));
+  const raw = await getArea('local', LOCAL_STORAGE_KEYS);
   return migrateLocalSettings(raw as Partial<FilterSettingsLocal>);
 }
 
@@ -91,13 +141,18 @@ export async function initializeStorageDefaults(): Promise<void> {
 
   await Promise.all([
     setArea('sync', { ...DEFAULT_SYNC_SETTINGS, ...sync }),
-    setArea('local', { ...DEFAULT_LOCAL_SETTINGS, ...local })
+    setArea('local', { ...DEFAULT_LOCAL_SETTINGS, ...local }),
+    removeAreaKeys('sync', LEGACY_SYNC_STORAGE_KEYS),
+    removeAreaKeys('local', LEGACY_LOCAL_STORAGE_KEYS)
   ]);
 }
 
 export async function updateSyncSettings(partial: Partial<FilterSettingsSync>): Promise<void> {
   const next = migrateSyncSettings({ ...(await getSyncSettings()), ...partial });
-  await setArea('sync', next as unknown as Record<string, unknown>);
+  await Promise.all([
+    setArea('sync', next as unknown as Record<string, unknown>),
+    removeAreaKeys('sync', LEGACY_SYNC_STORAGE_KEYS)
+  ]);
 }
 
 export async function updateLocalSettings(partial: Partial<FilterSettingsLocal>): Promise<void> {
@@ -107,7 +162,10 @@ export async function updateLocalSettings(partial: Partial<FilterSettingsLocal>)
   next.includeKeywords = sanitizeKeywords(next.includeKeywords);
   next.excludeKeywords = sanitizeKeywords(next.excludeKeywords);
 
-  await setArea('local', next as unknown as Record<string, unknown>);
+  await Promise.all([
+    setArea('local', next as unknown as Record<string, unknown>),
+    removeAreaKeys('local', LEGACY_LOCAL_STORAGE_KEYS)
+  ]);
 }
 
 export function subscribeToStorageChanges(callback: (changes: ChangeMap, areaName: string) => void): () => void {

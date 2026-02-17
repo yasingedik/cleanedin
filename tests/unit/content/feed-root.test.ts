@@ -72,4 +72,34 @@ describe('feed root detection', () => {
 
     expect(roots.some((root) => root.classList.contains('cleanedin-badge'))).toBe(false);
   });
+
+  it('does not treat post action rows with update links as standalone roots', () => {
+    document.body.innerHTML = `
+      <main>
+        <div data-testid="mainFeed">
+          <article data-urn="urn:li:activity:200">
+            <header>
+              <a href="/in/john-doe">John Doe</a>
+              <time>3h</time>
+            </header>
+            <p>Promoted content should hide as one full post container.</p>
+            <div class="social-actions">
+              <a href="/feed/update/urn:li:activity:200">1 comment</a>
+              <button aria-label="Like">Like</button>
+              <button aria-label="Comment">Comment</button>
+              <button aria-label="Repost">Repost</button>
+            </div>
+          </article>
+        </div>
+      </main>
+    `;
+
+    const feedRoot = resolveFeedRoot(document);
+    const roots = findPostRoots(feedRoot as HTMLElement);
+    const actionRows = roots.filter((root) => root.classList.contains('social-actions'));
+    const articleRoots = roots.filter((root) => root.matches('article'));
+
+    expect(actionRows.length).toBe(0);
+    expect(articleRoots.length).toBeGreaterThan(0);
+  });
 });

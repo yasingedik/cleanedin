@@ -2,6 +2,8 @@ import { classifyPost } from './classifier';
 import { decidePostVisibility } from './decision';
 import { extractPostFeatures } from './extractor';
 import {
+  findPostRoots,
+  findNearestPostRoot,
   getPostRootSelectorCounts,
   isSupportedFeedPath,
   resolveFeedRoot,
@@ -33,6 +35,7 @@ let stopStorageWatcher: (() => void) | null = null;
 let stopRootAvailabilityWatcher: (() => void) | null = null;
 let noPostsFallbackTimer: number | null = null;
 let bodyFallbackSeedTimer: number | null = null;
+let startupSettingsSyncTimer: number | null = null;
 
 let activeSettings: FilterSettings = {
   ...DEFAULT_SYNC_SETTINGS,
@@ -80,15 +83,15 @@ function updateObservedPostsDiagnostics(newRootsCount: number): void {
   document.documentElement?.setAttribute('data-cleanedin-observed-posts', String(observedPostsCount));
 }
 
-function selectLeafRoots(roots: HTMLElement[]): HTMLElement[] {
+function selectTopRoots(roots: HTMLElement[]): HTMLElement[] {
   const uniqueRoots = [...new Set(roots)].filter((root) => root.isConnected);
-  return uniqueRoots.filter((root) => !uniqueRoots.some((candidate) => candidate !== root && root.contains(candidate)));
+  return uniqueRoots.filter((root) => !uniqueRoots.some((candidate) => candidate !== root && candidate.contains(root)));
 }
 
 function processObservedRoots(roots: HTMLElement[]): void {
-  const leafRoots = selectLeafRoots(roots);
-  updateObservedPostsDiagnostics(leafRoots.length);
-  for (const root of leafRoots) {
+  const topRoots = selectTopRoots(roots);
+  updateObservedPostsDiagnostics(topRoots.length);
+  for (const root of topRoots) {
     trackedRoots.add(root);
     evaluatePost(root);
   }
@@ -103,6 +106,37 @@ function reevaluateAllTrackedPosts(): void {
 
     evaluatePost(root);
   }
+}
+
+function collectVisiblePostRoots(): HTMLElement[] {
+  const scopes = new Set<ParentNode>();
+  const observerRoot = resolveObserverRoot();
+  if (observerRoot) {
+    scopes.add(observerRoot);
+  }
+
+  const feedRoot = resolveFeedRoot(document);
+  if (feedRoot) {
+    scopes.add(feedRoot);
+  }
+
+  const main = document.querySelector('main');
+  if (main) {
+    scopes.add(main);
+  }
+
+  scopes.add(document);
+
+  const roots = new Set<HTMLElement>();
+  for (const scope of scopes) {
+    for (const root of findPostRoots(scope)) {
+      if (root.isConnected) {
+        roots.add(root);
+      }
+    }
+  }
+
+  return [...roots];
 }
 
 function resolveObserverRoot(): HTMLElement | null {
@@ -153,6 +187,13 @@ function clearBodyFallbackSeedTimer(): void {
   }
 }
 
+function clearStartupSettingsSyncTimer(): void {
+  if (startupSettingsSyncTimer !== null) {
+    window.clearTimeout(startupSettingsSyncTimer);
+    startupSettingsSyncTimer = null;
+  }
+}
+
 function findActionClusterSeedRoots(): HTMLElement[] {
   const scope = document.querySelector('main') ?? document.body ?? document.documentElement;
   if (!scope) {
@@ -167,13 +208,28 @@ function findActionClusterSeedRoots(): HTMLElement[] {
       continue;
     }
 
-    const candidate = button.closest<HTMLElement>('article, [role="article"], li, div');
-    if (!candidate) {
+    const nearestRoot = findNearestPostRoot(button);
+    const fallbackRoot = button.closest<HTMLElement>('article, [role="article"], li');
+    const candidate = nearestRoot ?? fallbackRoot;
+    if (!candidate || !candidate.isConnected) {
       continue;
     }
 
     if (candidate.classList.contains('cleanedin-badge') || candidate.closest('.cleanedin-badge')) {
       continue;
+    }
+
+    if (!nearestRoot) {
+      const hasStructuralIdentity =
+        candidate.hasAttribute('data-urn') ||
+        candidate.hasAttribute('data-id') ||
+        candidate.hasAttribute('data-activity-urn') ||
+        candidate.hasAttribute('data-update-id') ||
+        candidate.hasAttribute('data-occludable-job-id') ||
+        candidate.matches('article, [role="article"]');
+      if (!hasStructuralIdentity) {
+        continue;
+      }
     }
 
     const textLength = (candidate.textContent ?? '').trim().length;
@@ -250,6 +306,18 @@ function scheduleNoPostsFallbackCheck(): void {
   }, 5000);
 }
 
+function scheduleStartupSettingsSync(): void {
+  clearStartupSettingsSyncTimer();
+
+  startupSettingsSyncTimer = window.setTimeout(() => {
+    if (!isSupportedFeedPath()) {
+      return;
+    }
+
+    void refreshSettingsAndReevaluate();
+  }, 1200);
+}
+
 function bindObserverWhenFeedRootReady(): void {
   stopWaitingForFeedRoot();
 
@@ -278,10 +346,21 @@ function bindObserverWhenFeedRootReady(): void {
 }
 
 async function refreshSettingsAndReevaluate(): Promise<void> {
-  activeSettings = await getSettings();
-  debugLog('settings-updated', activeSettings);
-  clearAllHiddenBadges();
-  reevaluateAllTrackedPosts();
+  try {
+    activeSettings = await getSettings();
+    debugLog('settings-updated', activeSettings);
+    for (const hiddenRoot of document.querySelectorAll<HTMLElement>('.cleanedin-hidden[data-cleanedin-hidden="true"]')) {
+      hiddenRoot.classList.remove('cleanedin-hidden');
+      hiddenRoot.removeAttribute('data-cleanedin-hidden');
+    }
+    clearAllHiddenBadges();
+    for (const root of collectVisiblePostRoots()) {
+      trackedRoots.add(root);
+    }
+    reevaluateAllTrackedPosts();
+  } catch (error) {
+    console.error('[cleanedin] failed to refresh settings', error);
+  }
 }
 
 function resetRouteState(): void {
@@ -291,6 +370,7 @@ function resetRouteState(): void {
   updateObservedPostsDiagnostics(0);
   clearNoPostsFallbackTimer();
   clearBodyFallbackSeedTimer();
+  clearStartupSettingsSyncTimer();
   clearAllHiddenBadges();
   clearTemporaryReveals();
   stopWaitingForFeedRoot();
@@ -311,11 +391,16 @@ async function activateForCurrentRoute(refreshSettings = false): Promise<void> {
 
   bindObserverWhenFeedRootReady();
   scheduleNoPostsFallbackCheck();
+  scheduleStartupSettingsSync();
 }
 
 async function boot(): Promise<void> {
   setRootModeDiagnostics();
-  activeSettings = await getSettings();
+  try {
+    activeSettings = await getSettings();
+  } catch (error) {
+    console.error('[cleanedin] failed to load settings at boot, using defaults', error);
+  }
 
   await activateForCurrentRoute(false);
 
@@ -345,4 +430,5 @@ window.addEventListener('beforeunload', () => {
   stopWaitingForFeedRoot();
   clearNoPostsFallbackTimer();
   clearBodyFallbackSeedTimer();
+  clearStartupSettingsSyncTimer();
 });

@@ -85,7 +85,7 @@ function hasStrongPostIdentity(root: HTMLElement): boolean {
     return true;
   }
 
-  return Boolean(root.querySelector('a[href*="/feed/update/"]'));
+  return false;
 }
 
 function hasFeedTrackingSignal(root: HTMLElement): boolean {
@@ -111,11 +111,8 @@ function isLikelyPostContainer(root: HTMLElement): boolean {
     return false;
   }
 
-  if (hasFeedTrackingSignal(root)) {
-    return true;
-  }
-
-  if (hasStrongPostIdentity(root)) {
+  const hasStrongIdentity = hasStrongPostIdentity(root);
+  if (hasStrongIdentity) {
     return true;
   }
 
@@ -124,14 +121,11 @@ function isLikelyPostContainer(root: HTMLElement): boolean {
     return false;
   }
 
-  if (root.matches('article, [role="article"]') && textLength >= 80) {
-    return true;
-  }
-
   if (textLength > 12_000) {
     return false;
   }
 
+  const hasFeedTracking = hasFeedTrackingSignal(root);
   const hasTime = Boolean(root.querySelector('time'));
   const hasActor =
     Boolean(root.querySelector('a[href*="/in/"]')) ||
@@ -144,8 +138,26 @@ function isLikelyPostContainer(root: HTMLElement): boolean {
     Boolean(root.querySelector('button[aria-label*="Send"]')) ||
     root.querySelectorAll('button').length >= 2;
   const hasUpdateLink = Boolean(root.querySelector(POST_LINK_SELECTOR));
+  const hasRichContent =
+    Boolean(root.querySelector('img')) ||
+    Boolean(root.querySelector('video')) ||
+    Boolean(root.querySelector('iframe')) ||
+    Boolean(root.querySelector('[aria-roledescription="carousel"]'));
+  const isArticleLike = root.matches('article, [role="article"]');
 
-  return hasUpdateLink || (hasActor && (hasTime || hasActions));
+  if (isArticleLike && textLength >= 80 && (hasActor || hasTime || hasUpdateLink)) {
+    return true;
+  }
+
+  if (hasFeedTracking && (textLength >= 120 || hasActor || hasTime || isArticleLike)) {
+    return true;
+  }
+
+  if (hasUpdateLink && textLength >= 120 && (hasActor || hasTime || hasRichContent)) {
+    return true;
+  }
+
+  return hasActor && (hasTime || hasActions);
 }
 
 function closestLikelyPostContainer(node: Element): HTMLElement | null {

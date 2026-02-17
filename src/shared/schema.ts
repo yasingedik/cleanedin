@@ -440,12 +440,20 @@ export function migrateSyncSettings(input: Partial<FilterSettingsSync> | undefin
   const src = input ?? {};
   const legacy = src as unknown as LegacySyncFields;
 
-  const hasLegacyCategoryMode = legacy.mode !== undefined || legacy.selectedCategories !== undefined;
+  const hasModernCategoryActions =
+    src.categoryActions !== undefined &&
+    typeof src.categoryActions === 'object' &&
+    src.categoryActions !== null &&
+    !Array.isArray(src.categoryActions);
+  const shouldApplyLegacyCategoryMode =
+    !hasModernCategoryActions && (legacy.mode !== undefined || legacy.selectedCategories !== undefined);
   const legacySelection = normalizeSelectedCategories(legacy.selectedCategories);
-  const categoryFallback = hasLegacyCategoryMode ? createCategoryActions('show') : DEFAULT_SYNC_SETTINGS.categoryActions;
+  const categoryFallback = shouldApplyLegacyCategoryMode
+    ? createCategoryActions('show')
+    : DEFAULT_SYNC_SETTINGS.categoryActions;
   const categoryActions = sanitizeCategoryActions(src.categoryActions, categoryFallback);
 
-  if (legacySelection && legacySelection.length > 0) {
+  if (shouldApplyLegacyCategoryMode && legacySelection && legacySelection.length > 0) {
     if (legacy.mode === 'show_only_selected') {
       for (const category of ALL_CATEGORIES) {
         categoryActions[category] = 'hide';

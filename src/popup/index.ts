@@ -103,6 +103,8 @@ const donationLinks = getElement<HTMLDivElement>('donationLinks');
 const status = getElement<HTMLParagraphElement>('status');
 
 let hydrating = false;
+let persistQueue: Promise<void> = Promise.resolve();
+let persistPending = false;
 
 function parseList(input: string): string[] {
   const set = new Set(
@@ -399,13 +401,40 @@ function readLocalSettings(): Partial<FilterSettingsLocal> {
   };
 }
 
-async function persistFromUI(): Promise<void> {
+async function flushPersist(): Promise<void> {
   if (hydrating) {
     return;
   }
 
-  await Promise.all([updateSyncSettings(readSyncSettings()), updateLocalSettings(readLocalSettings())]);
-  setStatus('Saved');
+  if (!persistPending) {
+    return;
+  }
+
+  persistPending = false;
+
+  const sync = readSyncSettings();
+  const local = readLocalSettings();
+
+  try {
+    await Promise.all([updateSyncSettings(sync), updateLocalSettings(local)]);
+    setStatus('Saved');
+  } catch (error) {
+    console.error('[cleanedin] Failed to save settings:', error);
+    setStatus('Save failed');
+  }
+
+  if (persistPending) {
+    await flushPersist();
+  }
+}
+
+function requestPersistFromUI(): void {
+  if (hydrating) {
+    return;
+  }
+
+  persistPending = true;
+  persistQueue = persistQueue.then(() => flushPersist());
 }
 
 function bindUIEvents(): void {
@@ -425,7 +454,7 @@ function bindUIEvents(): void {
 
   document.body.addEventListener('change', () => {
     maxAgeDays.disabled = readValueActionSwitch(ageAction) === 'off';
-    void persistFromUI();
+    requestPersistFromUI();
   });
 
   document.body.addEventListener('click', (event) => {
@@ -437,13 +466,13 @@ function bindUIEvents(): void {
 
     toggleAction(actionButton);
     maxAgeDays.disabled = readValueActionSwitch(ageAction) === 'off';
-    void persistFromUI();
+    requestPersistFromUI();
   });
 
-  includeKeywords.addEventListener('blur', () => void persistFromUI());
-  excludeKeywords.addEventListener('blur', () => void persistFromUI());
-  hiddenNames.addEventListener('blur', () => void persistFromUI());
-  maxAgeDays.addEventListener('blur', () => void persistFromUI());
+  includeKeywords.addEventListener('blur', () => requestPersistFromUI());
+  excludeKeywords.addEventListener('blur', () => requestPersistFromUI());
+  hiddenNames.addEventListener('blur', () => requestPersistFromUI());
+  maxAgeDays.addEventListener('blur', () => requestPersistFromUI());
 
   exportBtn.addEventListener('click', async () => {
     const settings = await getSettings();

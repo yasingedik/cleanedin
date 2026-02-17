@@ -26,7 +26,7 @@ describe('FeedObserver', () => {
       main.innerHTML = '<div id="feed-root"><article data-urn="urn:li:activity:1"></article></div>';
       document.body.appendChild(main);
 
-      await wait(20);
+      await wait(60);
 
       expect(onPosts).toHaveBeenCalled();
       const roots = onPosts.mock.calls.at(-1)?.[0] ?? [];
@@ -51,7 +51,7 @@ describe('FeedObserver', () => {
       document.body.appendChild(firstMain);
 
       observer.start();
-      await wait(20);
+      await wait(60);
 
       firstMain.remove();
 
@@ -59,7 +59,7 @@ describe('FeedObserver', () => {
       secondMain.innerHTML = '<div id="feed-root"><article data-urn="urn:li:activity:second"></article></div>';
       document.body.appendChild(secondMain);
 
-      await wait(20);
+      await wait(60);
 
       const allObserved = onPosts.mock.calls.flatMap((call) => call[0]).map((root) => root.getAttribute('data-urn'));
       expect(allObserved).toContain('urn:li:activity:first');

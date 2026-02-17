@@ -71,6 +71,15 @@ describe('classifyPost', () => {
     }
   });
 
+  it('labels reaction activity without feedpost prefix when header context exists', () => {
+    const post = buildPost(
+      '<div>Jane Doe liked this • 2h</div><time datetime="2026-02-17T10:00:00.000Z">2h</time><button aria-label="Like">Like</button>'
+    );
+    const result = classifyPost(post);
+
+    expect(result.labels.has('liked')).toBe(true);
+  });
+
   it('labels commented/shared posts from feed activity header text', () => {
     const commented = buildPost('<p>Feed postTaylor commented on thisMorgan • 2nd</p>');
     const shared = buildPost('<p>Feed postAcme Inc reposted thisRobin • 2nd</p>');

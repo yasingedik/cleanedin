@@ -4,13 +4,14 @@ import { rootHasAnySelector } from './helpers';
 const LEAD_TEXT_LENGTH = 360;
 const LEAD_POST_PREFIX = 'feedpost';
 const LEAD_ACTIVITY_MAX_OFFSET = 120;
+const LEAD_CONTEXT_MAX_LENGTH = 220;
 
 const SUGGESTED_LEAD_TOKENS = ['feedpostsuggested'];
 const RECOMMENDATION_LEAD_TOKENS = ['feedpostrecommendedforyou', 'feedpostjobsrecommendedforyou'];
 
-const LIKED_LEAD_TOKENS = ['likesthis'];
-const LOVED_LEAD_TOKENS = ['lovesthis'];
-const SUPPORTED_LEAD_TOKENS = ['supportsthis'];
+const LIKED_LEAD_TOKENS = ['likesthis', 'likedthis'];
+const LOVED_LEAD_TOKENS = ['lovesthis', 'lovedthis'];
+const SUPPORTED_LEAD_TOKENS = ['supportsthis', 'supportedthis'];
 const CELEBRATED_LEAD_TOKENS = ['celebratesthis', 'celebratedthis'];
 const FUNNY_LEAD_TOKENS = ['findsthisfunny'];
 const INSIGHTFUL_LEAD_TOKENS = ['findsthisinsightful'];
@@ -23,15 +24,44 @@ function getLeadActivityText(post: Parameters<CategoryRule['match']>[0]): string
   return post.textContent.slice(0, LEAD_TEXT_LENGTH).toLowerCase().replace(/\s+/g, '');
 }
 
+function getLeadContextText(post: Parameters<CategoryRule['match']>[0]): string {
+  return post.textContent.slice(0, LEAD_CONTEXT_MAX_LENGTH).toLowerCase().replace(/\s+/g, ' ');
+}
+
+function hasLeadActivityContext(post: Parameters<CategoryRule['match']>[0]): boolean {
+  const lead = getLeadContextText(post);
+  if (lead.replace(/\s+/g, '').startsWith(LEAD_POST_PREFIX)) {
+    return true;
+  }
+
+  if (post.hasTimestamp || post.connectionLevel !== null) {
+    return true;
+  }
+
+  if (/[•·|]/.test(lead)) {
+    return true;
+  }
+
+  if (/\b(?:1st|2nd|3rd\+?|following)\b/.test(lead)) {
+    return true;
+  }
+
+  return /\b\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|w|wk|wks|week|weeks|mo|month|months|y|yr|yrs|year|years)\b/.test(
+    lead
+  );
+}
+
 function hasLeadActivityToken(
   post: Parameters<CategoryRule['match']>[0],
   tokens: string[],
-  maxOffset = LEAD_ACTIVITY_MAX_OFFSET
+  maxOffset = LEAD_ACTIVITY_MAX_OFFSET,
+  requireContext = true
 ): boolean {
-  const lead = getLeadActivityText(post);
-  if (!lead.startsWith(LEAD_POST_PREFIX)) {
+  if (requireContext && !hasLeadActivityContext(post)) {
     return false;
   }
+
+  const lead = getLeadActivityText(post);
 
   return tokens.some((token) => {
     const index = lead.indexOf(token);
@@ -50,7 +80,7 @@ export const suggestionRule: CategoryRule = {
   priority: 70,
   match: (post) => {
     return (
-      hasLeadActivityToken(post, SUGGESTED_LEAD_TOKENS, 40) ||
+      hasLeadActivityToken(post, SUGGESTED_LEAD_TOKENS, 40, false) ||
       rootHasAnySelector(post, ['[data-test-id*="suggested"]', '[data-view-name*="suggest"]'])
     );
   }
@@ -61,7 +91,7 @@ export const recommendationRule: CategoryRule = {
   category: 'recommendation',
   priority: 68,
   match: (post) => {
-    if (hasLeadActivityToken(post, RECOMMENDATION_LEAD_TOKENS, 40)) {
+    if (hasLeadActivityToken(post, RECOMMENDATION_LEAD_TOKENS, 40, false)) {
       return true;
     }
 

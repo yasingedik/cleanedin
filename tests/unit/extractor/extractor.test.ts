@@ -67,6 +67,60 @@ describe('extractPostFeatures connection levels', () => {
     const features = extractPostFeatures(root);
     expect(features.connectionLevel).toBeNull();
   });
+
+  it('detects following from follow control aria-label when actor line omits following token', () => {
+    const root = createPostRoot(`
+      <article data-urn="urn:li:activity:1004">
+        <div data-view-name="feed-actor">Jane Doe • 2d</div>
+        <button data-control-name="follow">Following Jane Doe</button>
+        <p>Regular feed update text.</p>
+      </article>
+    `);
+
+    const features = extractPostFeatures(root);
+    expect(features.connectionLevel).toBe('following');
+  });
+
+  it('does not treat plain follow button as already following', () => {
+    const root = createPostRoot(`
+      <article data-urn="urn:li:activity:1005">
+        <div data-view-name="feed-actor">Jane Doe • 2d</div>
+        <button data-control-name="follow">Follow</button>
+        <p>Regular feed update text.</p>
+      </article>
+    `);
+
+    const features = extractPostFeatures(root);
+    expect(features.connectionLevel).toBeNull();
+  });
+
+  it('detects following when actor text collapses with adjacent words', () => {
+    const root = createPostRoot(`
+      <article data-urn="urn:li:activity:1006">
+        <div data-view-name="feed-actor">Ozgur Koch • FollowingBank of America</div>
+        <p>Starting a new position</p>
+      </article>
+    `);
+
+    const features = extractPostFeatures(root);
+    expect(features.connectionLevel).toBe('following');
+  });
+
+  it('detects following from profile link text without actor data-view-name attributes', () => {
+    const root = createPostRoot(`
+      <article data-urn="urn:li:activity:1007">
+        <a href="https://www.linkedin.com/in/ozgur-koch-a673243/">
+          <p>Ozgur Koch<span> • Following</span></p>
+          <p>Bank of America, Senior Vice President</p>
+          <p>2w •</p>
+        </a>
+        <p>Starting a new position</p>
+      </article>
+    `);
+
+    const features = extractPostFeatures(root);
+    expect(features.connectionLevel).toBe('following');
+  });
 });
 
 describe('extractPostFeatures profile type fallback', () => {

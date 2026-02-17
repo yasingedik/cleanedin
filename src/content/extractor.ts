@@ -21,6 +21,10 @@ const ACTOR_SIGNAL_SELECTOR = [
   '[data-view-name*="actor"]',
   '[data-test-id*="actor"]'
 ].join(', ');
+const CONNECTION_CONTROL_SELECTOR = 'button, [role="button"], a[role="button"]';
+const PROFILE_LINK_SELECTOR = ['a[href*="/in/"]', 'a[href*="/company/"]', 'a[href*="/school/"]', 'a[href*="/groups/"]'].join(
+  ', '
+);
 
 const LEAD_ACTIVITY_NAME_PATTERNS = [
   /^(.+?)\s+(?:reposted|reshared|shared)\s+(?:this|a post)\b/i,
@@ -287,22 +291,69 @@ function collectConnectionSignalTexts(root: HTMLElement, leadText: string): stri
     }
   }
 
+  const profileLinks = root.querySelectorAll<HTMLAnchorElement>(PROFILE_LINK_SELECTOR);
+  for (const link of profileLinks) {
+    register(link.textContent, 240);
+    if (signals.length >= 12) {
+      break;
+    }
+  }
+
   register(leadText, 240);
   return signals;
+}
+
+function extractControlText(node: Element): string {
+  const text = [
+    node.getAttribute('aria-label'),
+    node.getAttribute('title'),
+    (node as HTMLElement).textContent
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(' ');
+
+  return normalizeText(text).toLowerCase();
+}
+
+function hasFollowingControlSignal(root: HTMLElement): boolean {
+  const controls = root.querySelectorAll<HTMLElement>(CONNECTION_CONTROL_SELECTOR);
+
+  for (const control of controls) {
+    const controlText = extractControlText(control);
+    if (!controlText) {
+      continue;
+    }
+
+    const hasFollowingKeyword = /\bfollowing\b(?!\s+up\b)/.test(controlText) || /\bunfollow\b/.test(controlText);
+    if (!hasFollowingKeyword) {
+      continue;
+    }
+
+    const controlName = (control.getAttribute('data-control-name') ?? '').toLowerCase();
+    const nearbyControlName = (control.closest<HTMLElement>('[data-control-name]')?.getAttribute('data-control-name') ?? '').toLowerCase();
+    const hasFollowControlHint = controlName.includes('follow') || nearbyControlName.includes('follow') || /\bfollow\b/.test(controlText);
+
+    if (hasFollowControlHint) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function extractConnectionLevelFromSignal(signal: string): ConnectionLevel | null {
   const hasMarkerBoundToken = (token: string): boolean =>
     new RegExp(`(?:^|[•·|])\\s*${token}\\b`).test(signal) || new RegExp(`\\b${token}\\b\\s*(?:[•·|]|$)`).test(signal);
 
-  const hasFollowingToken = /\bfollowing\b(?!\s+up\b)/.test(signal);
+  const hasFollowingToken = /\bfollowing(?!\s*up\b)/.test(signal);
   const hasConnectionMarkers = /[•·|]/.test(signal) || /\b(?:1st|2nd|3rd\+?)\b/.test(signal);
-  const hasFollowingWithRelativeAge = /\bfollowing\b(?!\s+up\b)\s+\d+\s*(?:y|yr|yrs|mo|mos|w|wk|wks|d|h|m|s)\b/.test(signal);
+  const hasFollowingWithRelativeAge = /\bfollowing(?!\s*up\b)\s*\d+\s*(?:y|yr|yrs|mo|mos|w|wk|wks|d|h|m|s)\b/.test(signal);
+  const hasFollowingAfterMarker = /(?:^|[•·|])\s*following(?!\s*up\b)/.test(signal);
 
   if (
     !/\bfollowed\b/.test(signal) &&
-    (/(?:^|[•·|])\s*following\b/.test(signal) ||
-      /\bfollowing\b\s*(?:[•·|]|$)/.test(signal) ||
+    (hasFollowingAfterMarker ||
+      /\bfollowing(?!\s*up\b)\s*(?:[•·|]|$)/.test(signal) ||
       hasFollowingWithRelativeAge ||
       (hasFollowingToken && hasConnectionMarkers))
   ) {
@@ -325,6 +376,10 @@ function extractConnectionLevelFromSignal(signal: string): ConnectionLevel | nul
 }
 
 function extractConnectionLevel(root: HTMLElement, leadText: string): ConnectionLevel | null {
+  if (hasFollowingControlSignal(root)) {
+    return 'following';
+  }
+
   const signals = collectConnectionSignalTexts(root, leadText);
   for (const signal of signals) {
     const level = extractConnectionLevelFromSignal(signal);
