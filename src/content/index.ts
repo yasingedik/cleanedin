@@ -11,7 +11,13 @@ import {
   watchRouteChanges
 } from './feed-root';
 import { FeedObserver } from './observer';
-import { applyPostRendering, clearAllHiddenBadges, clearTemporaryReveals } from './render';
+import {
+  applyPostRendering,
+  clearAllHiddenBadges,
+  clearTemporaryReveals,
+  ensureFloatingOptionsPanel,
+  removeFloatingOptionsPanel
+} from './render';
 import { DEFAULT_LOCAL_SETTINGS, DEFAULT_SYNC_SETTINGS } from '../shared/schema';
 import { getSettings, subscribeToStorageChanges } from '../shared/storage';
 import type { FilterSettings } from '../shared/types';
@@ -322,8 +328,11 @@ function bindObserverWhenFeedRootReady(): void {
   stopWaitingForFeedRoot();
 
   if (!isSupportedFeedPath()) {
+    removeFloatingOptionsPanel();
     return;
   }
+
+  ensureFloatingOptionsPanel();
 
   if (useBodyRootFallback) {
     ensureObserver().start();
@@ -373,6 +382,7 @@ function resetRouteState(): void {
   clearStartupSettingsSyncTimer();
   clearAllHiddenBadges();
   clearTemporaryReveals();
+  removeFloatingOptionsPanel();
   stopWaitingForFeedRoot();
 }
 

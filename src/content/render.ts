@@ -5,9 +5,105 @@ const STYLE_ID = 'cleanedin-content-styles';
 const HIDDEN_CLASS = 'cleanedin-hidden';
 const BADGE_CLASS = 'cleanedin-badge';
 const BADGE_FOR_ATTR = 'data-cleanedin-badge-for';
+const FLOATING_PANEL_ID = 'cleanedin-floating-options';
+const FLOATING_PANEL_VISIBILITY_STORAGE_KEY = 'cleanedin-floating-options-visible-v1';
 
 const temporaryRevealRoots = new Set<HTMLElement>();
 const badgeByRoot = new WeakMap<HTMLElement, HTMLElement>();
+
+function readFloatingPanelVisibility(): boolean {
+  try {
+    const raw = window.localStorage.getItem(FLOATING_PANEL_VISIBILITY_STORAGE_KEY);
+    if (raw === null) {
+      return true;
+    }
+
+    return raw !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+function persistFloatingPanelVisibility(visible: boolean): void {
+  try {
+    window.localStorage.setItem(FLOATING_PANEL_VISIBILITY_STORAGE_KEY, String(visible));
+  } catch {
+    // Ignore localStorage failures in strict/private contexts.
+  }
+}
+
+function resolveLinkedInLeftRailHost(): HTMLElement | null {
+  const candidates = [
+    ...document.querySelectorAll<HTMLElement>('main .scaffold-layout__aside'),
+    ...document.querySelectorAll<HTMLElement>('main .scaffold-layout__sidebar'),
+    ...document.querySelectorAll<HTMLElement>('main aside')
+  ].filter((candidate) => candidate.isConnected);
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return (
+    candidates.find((candidate) => {
+      const rect = candidate.getBoundingClientRect();
+      return rect.left < window.innerWidth / 2;
+    }) ?? candidates[0]
+  );
+}
+
+function getFloatingPanelRoot(): HTMLElement {
+  const panel = document.createElement('section');
+  panel.id = FLOATING_PANEL_ID;
+  panel.setAttribute('data-cleanedin-ui', '1');
+
+  const header = document.createElement('header');
+  header.className = 'cleanedin-floating-options__header';
+
+  const title = document.createElement('strong');
+  title.textContent = 'CleanedIn Options';
+
+  const toggleLabel = document.createElement('label');
+  toggleLabel.className = 'cleanedin-floating-options__toggle';
+  toggleLabel.textContent = 'Visible';
+
+  const toggle = document.createElement('input');
+  toggle.type = 'checkbox';
+  toggle.checked = readFloatingPanelVisibility();
+
+  const launcher = document.createElement('button');
+  launcher.type = 'button';
+  launcher.className = 'cleanedin-floating-options__launcher';
+  launcher.textContent = 'CleanedIn options';
+
+  const frameWrap = document.createElement('div');
+  frameWrap.className = 'cleanedin-floating-options__frame-wrap';
+
+  const iframe = document.createElement('iframe');
+  iframe.className = 'cleanedin-floating-options__frame';
+  iframe.src = chrome.runtime.getURL('src/popup/index.html');
+  iframe.title = 'CleanedIn options';
+
+  toggleLabel.appendChild(toggle);
+  header.append(title, toggleLabel);
+  frameWrap.appendChild(iframe);
+  panel.append(header, frameWrap, launcher);
+
+  const syncVisibility = () => {
+    const visible = toggle.checked;
+    panel.dataset.visible = visible ? 'true' : 'false';
+    launcher.hidden = visible;
+    persistFloatingPanelVisibility(visible);
+  };
+
+  toggle.addEventListener('change', syncVisibility);
+  launcher.addEventListener('click', () => {
+    toggle.checked = true;
+    syncVisibility();
+  });
+
+  syncVisibility();
+  return panel;
+}
 
 const CATEGORY_BADGE_LABELS = {
   ad: 'ads/promoted',
@@ -298,6 +394,29 @@ export function clearAllHiddenBadges(): void {
   for (const badge of document.querySelectorAll<HTMLElement>(`.${BADGE_CLASS}`)) {
     badge.remove();
   }
+}
+
+export function ensureFloatingOptionsPanel(): void {
+  ensureStyleInjection();
+  if (document.getElementById(FLOATING_PANEL_ID)) {
+    return;
+  }
+
+  const panel = getFloatingPanelRoot();
+  const railHost = resolveLinkedInLeftRailHost();
+
+  if (railHost) {
+    railHost.prepend(panel);
+    panel.dataset.mount = 'rail';
+    return;
+  }
+
+  panel.dataset.mount = 'fixed';
+  document.body.appendChild(panel);
+}
+
+export function removeFloatingOptionsPanel(): void {
+  document.getElementById(FLOATING_PANEL_ID)?.remove();
 }
 
 export function applyPostRendering(post: PostFeatures, decision: PostDecision, settings: FilterSettings): void {

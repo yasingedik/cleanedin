@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { applyPostRendering, clearAllHiddenBadges, clearTemporaryReveals } from '../../../src/content/render';
+import {
+  applyPostRendering,
+  clearAllHiddenBadges,
+  clearTemporaryReveals,
+  ensureFloatingOptionsPanel,
+  removeFloatingOptionsPanel
+} from '../../../src/content/render';
 import { ALL_CATEGORIES } from '../../../src/shared/schema';
 import type { CategoryActions, FilterSettings, PostDecision, PostFeatures } from '../../../src/shared/types';
 
@@ -85,6 +91,8 @@ function buildPost(): PostFeatures {
 afterEach(() => {
   clearTemporaryReveals();
   clearAllHiddenBadges();
+  removeFloatingOptionsPanel();
+  window.localStorage.removeItem('cleanedin-floating-options-visible-v1');
   document.body.innerHTML = '';
 });
 
@@ -182,5 +190,40 @@ describe('render temporary reveal lifecycle', () => {
     expect(document.querySelector('.cleanedin-badge span')?.textContent).toBe('Post hidden (name: Acme Inc)');
 
     post.root.remove();
+  });
+});
+
+
+describe('floating options panel', () => {
+  it('mounts the options panel and persists visibility toggle state', () => {
+    const originalChrome = globalThis.chrome;
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
+        runtime: {
+          getURL: (path: string) => `chrome-extension://test/${path}`
+        }
+      }
+    });
+
+    ensureFloatingOptionsPanel();
+
+    const panel = document.getElementById('cleanedin-floating-options');
+    expect(panel).not.toBeNull();
+
+    const toggle = panel?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    expect(toggle).not.toBeNull();
+    expect(toggle?.checked).toBe(true);
+
+    toggle?.click();
+
+    expect(panel?.dataset.visible).toBe('false');
+    expect(window.localStorage.getItem('cleanedin-floating-options-visible-v1')).toBe('false');
+
+    removeFloatingOptionsPanel();
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: originalChrome
+    });
   });
 });
