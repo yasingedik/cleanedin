@@ -2,14 +2,16 @@
   "manifest_version": 3,
   "name": "CleanedIn Feed Filter",
   "description": "Filter LinkedIn feed posts by category, identity, keyword, and age.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -22,7 +24,9 @@
         "chunks/*",
         "assets/*"
       ],
-      "matches": ["https://www.linkedin.com/*"]
+      "matches": [
+        "https://www.linkedin.com/*"
+      ]
     }
   ],
   "action": {
@@ -35,8 +39,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.linkedin.com/*"],
-      "js": ["content-loader.js"],
+      "matches": [
+        "https://www.linkedin.com/*"
+      ],
+      "js": [
+        "content-loader.js"
+      ],
       "run_at": "document_idle"
     }
   ]
