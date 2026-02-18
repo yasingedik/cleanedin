@@ -18,7 +18,23 @@ const INSIGHTFUL_LEAD_TOKENS = ['findsthisinsightful'];
 
 const COMMENTED_LEAD_TOKENS = ['commentedonthis'];
 const FOLLOWED_LEAD_TOKENS = ['followedthis'];
+const FOLLOWS_LEAD_TOKENS = ['follows'];
 const SHARED_LEAD_TOKENS = ['repostedthis', 'resharedthis'];
+const FOLLOW_ACTIVITY_HEADER_SELECTOR = [
+  '[data-view-name="feed-header-text"]',
+  '[data-view-name*="feed-header"]',
+  '[data-view-name*="feed-actor"]'
+].join(', ');
+const HEADER_ACTIVITY_EXCLUDE_SELECTOR = [
+  '[data-view-name="feed-commentary"]',
+  '[data-view-name^="comment-"]',
+  '[data-view-name*="comment-"]',
+  '[data-testid*="comment"]'
+].join(', ');
+
+function compactText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
 
 function getLeadActivityText(post: Parameters<CategoryRule['match']>[0]): string {
   return post.textContent.slice(0, LEAD_TEXT_LENGTH).toLowerCase().replace(/\s+/g, '');
@@ -74,6 +90,83 @@ function textIncludesAny(post: Parameters<CategoryRule['match']>[0], phrases: st
   return phrases.some((phrase) => text.includes(phrase));
 }
 
+function leadContextIncludesAny(post: Parameters<CategoryRule['match']>[0], phrases: string[]): boolean {
+  const lead = getLeadContextText(post);
+  return phrases.some((phrase) => lead.includes(phrase));
+}
+
+function collectHeaderActivityTexts(post: Parameters<CategoryRule['match']>[0]): string[] {
+  const scope = post.contentRoot ?? post.root;
+  const headerTexts: string[] = [];
+  const seen = new Set<string>();
+  const headerNodes = [...scope.querySelectorAll<HTMLElement>(FOLLOW_ACTIVITY_HEADER_SELECTOR)].slice(0, 10);
+
+  const register = (raw: string | null, maxLength = 260): void => {
+    if (!raw) {
+      return;
+    }
+
+    const normalized = raw.toLowerCase().replace(/\s+/g, ' ').trim().slice(0, maxLength);
+    if (!normalized || seen.has(normalized)) {
+      return;
+    }
+
+    seen.add(normalized);
+    headerTexts.push(normalized);
+  };
+
+  for (const node of headerNodes) {
+    if (node.closest(HEADER_ACTIVITY_EXCLUDE_SELECTOR)) {
+      continue;
+    }
+
+    register(node.textContent, 180);
+    register(node.parentElement?.textContent ?? null);
+    register(node.closest<HTMLElement>('[data-view-name*="feed-header"], [data-view-name*="feed-actor"]')?.textContent ?? null);
+  }
+
+  return headerTexts;
+}
+
+function hasLikedHeaderActivity(post: Parameters<CategoryRule['match']>[0]): boolean {
+  const joinedHeaderText = collectHeaderActivityTexts(post).join(' ');
+  if (!joinedHeaderText) {
+    return false;
+  }
+
+  if (
+    /\b(?:likes?|liked)\s+this\b/.test(joinedHeaderText) ||
+    /\band\s+\d+\s+other\s+connections?\s+(?:like|likes|liked)\s+this\b/.test(joinedHeaderText)
+  ) {
+    return true;
+  }
+
+  const compactHeaderText = compactText(joinedHeaderText);
+  return (
+    compactHeaderText.includes('likedthis') ||
+    compactHeaderText.includes('likesthis') ||
+    /and\d+otherconnections?(?:like|likes|liked)this/.test(compactHeaderText)
+  );
+}
+
+function hasFollowsHeaderActivity(post: Parameters<CategoryRule['match']>[0]): boolean {
+  const joinedHeaderText = collectHeaderActivityTexts(post).join(' ');
+
+  if (!joinedHeaderText) {
+    return false;
+  }
+
+  if (/\bfollows\b(?!\s+up\b)/.test(joinedHeaderText) || /\bfollowed\s+this\b/.test(joinedHeaderText)) {
+    return true;
+  }
+
+  const compactHeaderText = compactText(joinedHeaderText);
+  return (
+    (compactHeaderText.includes('follows') && !compactHeaderText.includes('followsup')) ||
+    compactHeaderText.includes('followedthis')
+  );
+}
+
 export const suggestionRule: CategoryRule = {
   id: 'suggested.structural',
   category: 'suggested',
@@ -81,6 +174,7 @@ export const suggestionRule: CategoryRule = {
   match: (post) => {
     return (
       hasLeadActivityToken(post, SUGGESTED_LEAD_TOKENS, 40, false) ||
+      leadContextIncludesAny(post, ['suggested', 'suggested for you']) ||
       rootHasAnySelector(post, ['[data-test-id*="suggested"]', '[data-view-name*="suggest"]'])
     );
   }
@@ -113,7 +207,12 @@ export const likedRule: CategoryRule = {
   category: 'liked',
   priority: 60,
   match: (post) => {
-    return hasLeadActivityToken(post, LIKED_LEAD_TOKENS) || rootHasAnySelector(post, ['[data-activity-type="LIKE"]']);
+    return (
+      hasLeadActivityToken(post, LIKED_LEAD_TOKENS) ||
+      hasLikedHeaderActivity(post) ||
+      leadContextIncludesAny(post, [' liked this ', ' likes this ']) ||
+      rootHasAnySelector(post, ['[data-activity-type="LIKE"]'])
+    );
   }
 };
 
@@ -176,7 +275,8 @@ export const commentedRule: CategoryRule = {
   match: (post) => {
     return (
       rootHasAnySelector(post, ['[data-activity-type="COMMENT"]']) ||
-      hasLeadActivityToken(post, COMMENTED_LEAD_TOKENS)
+      hasLeadActivityToken(post, COMMENTED_LEAD_TOKENS) ||
+      leadContextIncludesAny(post, [' commented on this ', ' commented this '])
     );
   }
 };
@@ -186,10 +286,15 @@ export const followedRule: CategoryRule = {
   category: 'followed',
   priority: 55,
   match: (post) => {
+    const followsHeaderActivity = hasFollowsHeaderActivity(post);
+
     return (
       post.connectionLevel === 'following' ||
       rootHasAnySelector(post, ['[data-activity-type="FOLLOW"]']) ||
-      hasLeadActivityToken(post, FOLLOWED_LEAD_TOKENS)
+      hasLeadActivityToken(post, FOLLOWED_LEAD_TOKENS) ||
+      (hasLeadActivityToken(post, FOLLOWS_LEAD_TOKENS) && followsHeaderActivity) ||
+      followsHeaderActivity ||
+      leadContextIncludesAny(post, [' followed this '])
     );
   }
 };

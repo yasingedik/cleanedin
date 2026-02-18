@@ -2,7 +2,8 @@ import { classifyPost } from './classifier';
 import { decidePostVisibility } from './decision';
 import { extractPostFeatures } from './extractor';
 import {
-  findPostRoots,
+  findNearestPostTarget,
+  findPostTargets,
   findNearestPostRoot,
   getPostRootSelectorCounts,
   isSupportedFeedPath,
@@ -11,10 +12,17 @@ import {
   watchRouteChanges
 } from './feed-root';
 import { FeedObserver } from './observer';
-import { applyPostRendering, clearAllHiddenBadges, clearTemporaryReveals } from './render';
+import {
+  applyPostRendering,
+  clearAllHiddenBadges,
+  clearTemporaryReveals,
+  ensureFloatingOptionsPanel,
+  removeFloatingOptionsPanel
+} from './render';
 import { DEFAULT_LOCAL_SETTINGS, DEFAULT_SYNC_SETTINGS } from '../shared/schema';
 import { getSettings, subscribeToStorageChanges } from '../shared/storage';
 import type { FilterSettings } from '../shared/types';
+import type { PostTarget } from './feed-root';
 
 try {
   document.documentElement?.setAttribute('data-cleanedin-content-boot', '1');
@@ -48,13 +56,27 @@ function debugLog(...args: unknown[]): void {
   }
 }
 
-function evaluatePost(root: HTMLElement): void {
+function resolvePostTargetForRoot(root: HTMLElement): PostTarget {
+  const nearest = findNearestPostTarget(root);
+  if (nearest && nearest.renderRoot === root) {
+    return nearest;
+  }
+
+  return {
+    renderRoot: root,
+    featureRoot: root,
+    source: 'fallback'
+  };
+}
+
+function evaluatePostTarget(target: PostTarget): void {
+  const root = target.renderRoot;
   if (!root.isConnected) {
     trackedRoots.delete(root);
     return;
   }
 
-  const features = extractPostFeatures(root);
+  const features = extractPostFeatures(target.renderRoot, target.featureRoot);
   const result = classifyPost(features);
   features.labels = result.labels;
 
@@ -69,6 +91,8 @@ function evaluatePost(root: HTMLElement): void {
     root.setAttribute('data-cleanedin-connection-level', features.connectionLevel ?? '');
     root.setAttribute('data-cleanedin-profile-type', features.profileType ?? '');
     root.setAttribute('data-cleanedin-actor-names', features.actorNames.join('|'));
+    root.setAttribute('data-cleanedin-post-id-source', features.postIdSource ?? '');
+    root.setAttribute('data-cleanedin-feature-root', features.contentRoot?.getAttribute('data-view-name') ?? '');
     if (typeof features.ageHours === 'number') {
       root.setAttribute('data-cleanedin-age-days', (features.ageHours / 24).toFixed(2));
     } else {
@@ -77,23 +101,50 @@ function evaluatePost(root: HTMLElement): void {
   }
 }
 
+function evaluatePost(root: HTMLElement): void {
+  evaluatePostTarget(resolvePostTargetForRoot(root));
+}
+
 function updateObservedPostsDiagnostics(newRootsCount: number): void {
   observedPostsCount += newRootsCount;
   window.__cleanedin_observed_posts = observedPostsCount;
   document.documentElement?.setAttribute('data-cleanedin-observed-posts', String(observedPostsCount));
 }
 
-function selectTopRoots(roots: HTMLElement[]): HTMLElement[] {
-  const uniqueRoots = [...new Set(roots)].filter((root) => root.isConnected);
-  return uniqueRoots.filter((root) => !uniqueRoots.some((candidate) => candidate !== root && candidate.contains(root)));
+function selectTopTargets(targets: PostTarget[]): PostTarget[] {
+  const byRoot = new Map<HTMLElement, PostTarget>();
+  for (const target of targets) {
+    if (!target.renderRoot.isConnected) {
+      continue;
+    }
+
+    const existing = byRoot.get(target.renderRoot);
+    if (!existing) {
+      byRoot.set(target.renderRoot, target);
+      continue;
+    }
+
+    const existingHasFeature = existing.featureRoot !== existing.renderRoot;
+    const incomingHasFeature = target.featureRoot !== target.renderRoot;
+    if (!existingHasFeature && incomingHasFeature) {
+      byRoot.set(target.renderRoot, target);
+    }
+  }
+
+  const uniqueTargets = [...byRoot.values()];
+  return uniqueTargets.filter(
+    (target) =>
+      !uniqueTargets.some((candidate) => candidate !== target && candidate.renderRoot.contains(target.renderRoot))
+  );
 }
 
 function processObservedRoots(roots: HTMLElement[]): void {
-  const topRoots = selectTopRoots(roots);
-  updateObservedPostsDiagnostics(topRoots.length);
-  for (const root of topRoots) {
-    trackedRoots.add(root);
-    evaluatePost(root);
+  const targets = roots.map((root) => resolvePostTargetForRoot(root));
+  const topTargets = selectTopTargets(targets);
+  updateObservedPostsDiagnostics(topTargets.length);
+  for (const target of topTargets) {
+    trackedRoots.add(target.renderRoot);
+    evaluatePostTarget(target);
   }
 }
 
@@ -129,9 +180,9 @@ function collectVisiblePostRoots(): HTMLElement[] {
 
   const roots = new Set<HTMLElement>();
   for (const scope of scopes) {
-    for (const root of findPostRoots(scope)) {
-      if (root.isConnected) {
-        roots.add(root);
+    for (const target of findPostTargets(scope)) {
+      if (target.renderRoot.isConnected) {
+        roots.add(target.renderRoot);
       }
     }
   }
@@ -321,6 +372,12 @@ function scheduleStartupSettingsSync(): void {
 function bindObserverWhenFeedRootReady(): void {
   stopWaitingForFeedRoot();
 
+  if (!isSupportedFeedPath() || !activeSettings.showInFeedOptionsPanel) {
+    removeFloatingOptionsPanel();
+  } else {
+    ensureFloatingOptionsPanel();
+  }
+
   if (!isSupportedFeedPath()) {
     return;
   }
@@ -349,6 +406,13 @@ async function refreshSettingsAndReevaluate(): Promise<void> {
   try {
     activeSettings = await getSettings();
     debugLog('settings-updated', activeSettings);
+
+    if (!isSupportedFeedPath() || !activeSettings.showInFeedOptionsPanel) {
+      removeFloatingOptionsPanel();
+    } else {
+      ensureFloatingOptionsPanel();
+    }
+
     for (const hiddenRoot of document.querySelectorAll<HTMLElement>('.cleanedin-hidden[data-cleanedin-hidden="true"]')) {
       hiddenRoot.classList.remove('cleanedin-hidden');
       hiddenRoot.removeAttribute('data-cleanedin-hidden');
@@ -373,6 +437,7 @@ function resetRouteState(): void {
   clearStartupSettingsSyncTimer();
   clearAllHiddenBadges();
   clearTemporaryReveals();
+  removeFloatingOptionsPanel();
   stopWaitingForFeedRoot();
 }
 

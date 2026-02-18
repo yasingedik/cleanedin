@@ -85,7 +85,8 @@ function createProfileTypeActions(defaultAction: FilterAction): ProfileTypeActio
 export const DEFAULT_SYNC_SETTINGS: FilterSettingsSync = {
   enabled: true,
   categoryActions: createDefaultCategoryActions(),
-  showBadgeOnHidden: true
+  showBadgeOnHidden: true,
+  showInFeedOptionsPanel: true
 };
 
 export const DEFAULT_LOCAL_SETTINGS: FilterSettingsLocal = {
@@ -471,7 +472,8 @@ export function migrateSyncSettings(input: Partial<FilterSettingsSync> | undefin
   return {
     enabled: src.enabled ?? DEFAULT_SYNC_SETTINGS.enabled,
     categoryActions,
-    showBadgeOnHidden: src.showBadgeOnHidden ?? DEFAULT_SYNC_SETTINGS.showBadgeOnHidden
+    showBadgeOnHidden: src.showBadgeOnHidden ?? DEFAULT_SYNC_SETTINGS.showBadgeOnHidden,
+    showInFeedOptionsPanel: src.showInFeedOptionsPanel ?? DEFAULT_SYNC_SETTINGS.showInFeedOptionsPanel
   };
 }
 

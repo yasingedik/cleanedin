@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { applyPostRendering, clearAllHiddenBadges, clearTemporaryReveals } from '../../../src/content/render';
+import {
+  applyPostRendering,
+  clearAllHiddenBadges,
+  clearTemporaryReveals,
+  ensureFloatingOptionsPanel,
+  removeFloatingOptionsPanel
+} from '../../../src/content/render';
 import { ALL_CATEGORIES } from '../../../src/shared/schema';
 import type { CategoryActions, FilterSettings, PostDecision, PostFeatures } from '../../../src/shared/types';
 
@@ -31,6 +37,7 @@ const settings: FilterSettings = {
     ad: 'hide'
   },
   showBadgeOnHidden: true,
+  showInFeedOptionsPanel: true,
   includeKeywords: [],
   includeKeywordsAction: 'off',
   excludeKeywords: [],
@@ -62,13 +69,13 @@ const hideDecision: PostDecision = {
   reasonContext: emptyReasonContext()
 };
 
-function buildPost(): PostFeatures {
+function buildPost(postId = 'urn:li:activity:test'): PostFeatures {
   const root = document.createElement('article');
-  root.setAttribute('data-urn', 'urn:li:activity:test');
+  root.setAttribute('data-urn', postId);
   document.body.appendChild(root);
 
   return {
-    postId: 'urn:li:activity:test',
+    postId,
     root,
     hasTimestamp: false,
     ageHours: null,
@@ -85,6 +92,7 @@ function buildPost(): PostFeatures {
 afterEach(() => {
   clearTemporaryReveals();
   clearAllHiddenBadges();
+  removeFloatingOptionsPanel();
   document.body.innerHTML = '';
 });
 
@@ -113,7 +121,7 @@ describe('render temporary reveal lifecycle', () => {
   it('renders category badge with actor name for reactions', () => {
     const post = buildPost();
     post.labels = new Set(['liked']);
-    post.actorNames = ['Jane Doe'];
+    post.actorNames = ['Sample Person'];
 
     const decision: PostDecision = {
       hide: true,
@@ -124,7 +132,7 @@ describe('render temporary reveal lifecycle', () => {
     };
 
     applyPostRendering(post, decision, settings);
-    expect(document.querySelector('.cleanedin-badge span')?.textContent).toBe('Post hidden: liked by Jane Doe');
+    expect(document.querySelector('.cleanedin-badge span')?.textContent).toBe('Post hidden: liked by Sample Person');
 
     post.root.remove();
   });
@@ -182,5 +190,195 @@ describe('render temporary reveal lifecycle', () => {
     expect(document.querySelector('.cleanedin-badge span')?.textContent).toBe('Post hidden (name: Acme Inc)');
 
     post.root.remove();
+  });
+
+  it('keeps a single badge per hidden post across repeated renders', () => {
+    const post = buildPost();
+
+    applyPostRendering(post, hideDecision, settings);
+    applyPostRendering(post, hideDecision, settings);
+
+    expect(document.querySelectorAll('.cleanedin-badge').length).toBe(1);
+    expect(post.root.classList.contains('cleanedin-hidden')).toBe(true);
+
+    post.root.remove();
+  });
+
+  it('removes stale orphan badge when a post rerenders with the same post id', () => {
+    const firstPost = buildPost('urn:li:activity:rerender');
+    applyPostRendering(firstPost, hideDecision, settings);
+    expect(document.querySelectorAll('.cleanedin-badge').length).toBe(1);
+
+    firstPost.root.remove();
+
+    const rerenderedRoot = document.createElement('article');
+    rerenderedRoot.setAttribute('data-urn', 'urn:li:activity:rerender');
+    document.body.appendChild(rerenderedRoot);
+    const secondPost: PostFeatures = {
+      ...firstPost,
+      root: rerenderedRoot
+    };
+
+    applyPostRendering(secondPost, hideDecision, settings);
+
+    const badges = document.querySelectorAll<HTMLElement>('.cleanedin-badge');
+    expect(badges.length).toBe(1);
+    expect(badges[0]?.nextElementSibling).toBe(rerenderedRoot);
+
+    rerenderedRoot.remove();
+  });
+
+  it('preserves show once reveal across rerender for the same logical post id', () => {
+    const firstPost = buildPost('urn:li:activity:show-once');
+    applyPostRendering(firstPost, hideDecision, settings);
+    const badgeButton = document.querySelector<HTMLButtonElement>('.cleanedin-badge button');
+    expect(badgeButton).not.toBeNull();
+    badgeButton?.click();
+    expect(firstPost.root.classList.contains('cleanedin-hidden')).toBe(false);
+
+    firstPost.root.remove();
+
+    const rerenderedRoot = document.createElement('article');
+    rerenderedRoot.setAttribute('data-urn', 'urn:li:activity:show-once');
+    document.body.appendChild(rerenderedRoot);
+    const secondPost: PostFeatures = {
+      ...firstPost,
+      root: rerenderedRoot
+    };
+
+    applyPostRendering(secondPost, hideDecision, settings);
+    expect(rerenderedRoot.classList.contains('cleanedin-hidden')).toBe(false);
+
+    clearTemporaryReveals();
+    applyPostRendering(secondPost, hideDecision, settings);
+    expect(rerenderedRoot.classList.contains('cleanedin-hidden')).toBe(true);
+
+    rerenderedRoot.remove();
+  });
+});
+
+
+describe('floating options panel', () => {
+
+
+  it('mounts as the last box inside the left rail stack', () => {
+    const originalChrome = globalThis.chrome;
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
+        runtime: {
+          getURL: (path: string) => `chrome-extension://test/${path}`
+        }
+      }
+    });
+
+    const main = document.createElement('main');
+    const rightAside = document.createElement('aside');
+    rightAside.className = 'scaffold-layout__aside';
+    rightAside.innerHTML = `<div class="artdeco-card"></div>`;
+
+    const leftSidebar = document.createElement('div');
+    leftSidebar.className = 'scaffold-layout__sidebar';
+    leftSidebar.innerHTML = `
+      <div class="scaffold-layout__sticky">
+        <div class="rail-stack">
+          <div class="artdeco-card" data-row="1"></div>
+          <div class="artdeco-card" data-row="2"></div>
+          <div class="artdeco-card" data-row="3"></div>
+          <a href="https://www.linkedin.com/in/sample-person/">Sample Person</a>
+          <a href="https://www.linkedin.com/groups/">Groups</a>
+          <a href="https://www.linkedin.com/events/">Events</a>
+          <a href="https://www.linkedin.com/newsletters/">Newsletters</a>
+        </div>
+      </div>
+    `;
+
+    main.append(leftSidebar, rightAside);
+    document.body.appendChild(main);
+
+    ensureFloatingOptionsPanel();
+
+    const stack = leftSidebar.querySelector('.rail-stack');
+    expect(stack?.lastElementChild?.id).toBe('cleanedin-floating-options');
+    expect(stack?.querySelector('#cleanedin-floating-options')?.getAttribute('data-mount')).toBe('rail');
+    expect(rightAside.querySelector('#cleanedin-floating-options')).toBeNull();
+
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: originalChrome
+    });
+  });
+
+  it('falls back to signal-based rail placement when scaffold classes are absent', () => {
+    const originalChrome = globalThis.chrome;
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
+        runtime: {
+          getURL: (path: string) => `chrome-extension://test/${path}`
+        }
+      }
+    });
+
+    document.body.innerHTML = `
+      <main>
+        <div id="layout">
+          <div id="left-column">
+            <div id="left-stack">
+              <section id="card-1">
+                <div data-view-name="identity-module">
+                  <a href="https://www.linkedin.com/in/sample-person/">Sample Person</a>
+                </div>
+              </section>
+              <section id="card-2">
+                <a data-view-name="home-nav-left-rail-growth-widgets-profile-views" href="https://www.linkedin.com/me/profile-views/">
+                  Profile viewers
+                </a>
+              </section>
+              <section id="card-3">
+                <a data-view-name="home-nav-left-rail-common-module-groups" href="https://www.linkedin.com/groups/">
+                  Groups
+                </a>
+              </section>
+            </div>
+          </div>
+        </div>
+      </main>
+    `;
+
+    ensureFloatingOptionsPanel();
+
+    const stack = document.getElementById('left-stack');
+    expect(stack?.lastElementChild?.id).toBe('cleanedin-floating-options');
+    expect(stack?.querySelector('#cleanedin-floating-options')?.getAttribute('data-mount')).toBe('rail');
+
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: originalChrome
+    });
+  });
+
+  it('does not render a header visibility switch in embedded mode', () => {
+    const originalChrome = globalThis.chrome;
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
+        runtime: {
+          getURL: (path: string) => `chrome-extension://test/${path}`
+        }
+      }
+    });
+
+    ensureFloatingOptionsPanel();
+
+    const panel = document.getElementById('cleanedin-floating-options');
+    expect(panel).not.toBeNull();
+    expect(panel?.querySelector('input[type="checkbox"]')).toBeNull();
+
+    removeFloatingOptionsPanel();
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: originalChrome
+    });
   });
 });

@@ -25,6 +25,7 @@ describe('Storage Integrity Security', () => {
       expect(result).toHaveProperty('enabled');
       expect(result).toHaveProperty('categoryActions');
       expect(result).toHaveProperty('showBadgeOnHidden');
+      expect(result).toHaveProperty('showInFeedOptionsPanel');
     });
 
     it('should handle null local settings gracefully', () => {
@@ -82,6 +83,7 @@ describe('Storage Integrity Security', () => {
       } as unknown as Partial<FilterSettings>;
       const result = migrateSyncSettings(malformed);
       expect(result).toHaveProperty('showBadgeOnHidden');
+      expect(result).toHaveProperty('showInFeedOptionsPanel');
       expect(result).not.toHaveProperty('unknownAction');
     });
   });
@@ -205,6 +207,7 @@ describe('Storage Integrity Security', () => {
       expect(typeof DEFAULT_SYNC_SETTINGS.enabled).toBe('boolean');
       expect(DEFAULT_SYNC_SETTINGS).toHaveProperty('categoryActions');
       expect(DEFAULT_SYNC_SETTINGS).toHaveProperty('showBadgeOnHidden');
+      expect(DEFAULT_SYNC_SETTINGS).toHaveProperty('showInFeedOptionsPanel');
       expect(typeof DEFAULT_SYNC_SETTINGS.categoryActions).toBe('object');
     });
 

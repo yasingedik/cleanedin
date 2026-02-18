@@ -17,7 +17,10 @@
 
 body {
   margin: 0;
-  min-width: 328px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 10% -5%, #ffffff 0%, rgba(255, 255, 255, 0) 44%),
     radial-gradient(circle at 90% 0%, #d7e8ff 0%, rgba(215, 232, 255, 0) 34%),
@@ -27,7 +30,20 @@ body {
 }
 
 .popup {
+  width: 100%;
+  max-width: 100%;
   padding: 8px;
+  overflow-x: hidden;
+}
+
+html[data-cleanedin-popup-mode='standalone'] body {
+  min-width: 360px;
+  width: 360px;
+}
+
+html[data-cleanedin-popup-mode='standalone'] .popup {
+  width: 360px;
+  max-width: 360px;
 }
 
 .hero {
@@ -125,14 +141,14 @@ h3 {
 
 .compact-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   margin-top: 6px;
 }
 
 .category-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
   margin-top: 6px;
 }
@@ -300,7 +316,7 @@ button:hover {
 
 .donation-links {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   margin-top: 6px;
 }
@@ -359,10 +375,6 @@ button:hover {
 }
 
 @media (max-width: 420px) {
-  body {
-    min-width: 306px;
-  }
-
   .compact-grid,
   .donation-links,
   .category-grid {
