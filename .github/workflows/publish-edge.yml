@@ -26,7 +26,7 @@ jobs:
     permissions:
       contents: read
     env:
-      EDGE_API_ROOT: https://api.addons.microsoftedge.microsoft.com/v1.1
+      EDGE_API_ROOT: https://api.addons.microsoftedge.microsoft.com/v1
     steps:
       - uses: actions/checkout@v4
 
@@ -58,7 +58,7 @@ jobs:
             echo "Unable to access Edge product metadata (HTTP $http_code)."
             cat edge-product-response.json || true
             if [ "$http_code" = "404" ]; then
-              echo "Check EDGE_PRODUCT_ID. It must match the Partner Center product ID for this extension."
+              echo "Check EDGE_PRODUCT_ID. It must be the Partner Center product ID for this extension and belong to the same Partner Center account as EDGE_API_KEY/EDGE_CLIENT_ID."
             elif [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
               echo "Check EDGE_API_KEY and EDGE_CLIENT_ID. They must be generated for this same Partner Center account."
             fi
@@ -86,7 +86,7 @@ jobs:
           if [ "$http_code" != "202" ]; then
             echo "Edge upload request failed."
             if [ "$http_code" = "404" ]; then
-              echo "Resource not found. Verify EDGE_PRODUCT_ID and that API access is enabled for this product."
+              echo "Resource not found. Verify EDGE_PRODUCT_ID and that this product belongs to the same Partner Center account as EDGE_API_KEY/EDGE_CLIENT_ID."
             elif [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
               echo "Authorization failed. Verify EDGE_API_KEY and EDGE_CLIENT_ID."
             fi
