@@ -3,6 +3,10 @@ name: publish-chrome
 on:
   workflow_dispatch:
     inputs:
+      store_run_id:
+        description: 'store-packages run ID to fetch artifacts from (required for manual runs)'
+        required: true
+        type: string
       skip_review:
         description: 'Set true to request skipReview (fails if ineligible)'
         required: false
@@ -19,36 +23,70 @@ on:
         options:
           - 'false'
           - 'true'
-  push:
-    tags:
-      - 'v*'
+  workflow_run:
+    workflows:
+      - store-packages
+    types:
+      - completed
 
 jobs:
   publish:
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     env:
       CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
       CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
       CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
-      CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
-      CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+      CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID || vars.CWS_PUBLISHER_ID }}
+      CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID || vars.CWS_EXTENSION_ID }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-
-      - run: npm ci
-      - run: npm run build
-
-      - name: Package extension for Chrome
+      - name: Resolve store-packages run ID
+        id: source
         run: |
-          cd dist
-          zip -r ../cleanedin-chrome.zip .
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            run_id="${{ github.event.workflow_run.id }}"
+          else
+            run_id="${{ github.event.inputs.store_run_id }}"
+          fi
+
+          if [ -z "$run_id" ]; then
+            echo "A store-packages run ID is required."
+            exit 1
+          fi
+
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download store package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source.outputs.run_id }}
+          path: artifacts
+
+      - name: Resolve Chrome package artifact
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+
+          matches=(artifacts/**/cleanedin-chrome-v*.zip)
+          if [ "${#matches[@]}" -eq 0 ]; then
+            echo "No cleanedin-chrome-v*.zip found in artifacts for run ${{ steps.source.outputs.run_id }}."
+            find artifacts -type f | sort || true
+            exit 1
+          fi
+
+          if [ "${#matches[@]}" -gt 1 ]; then
+            echo "Expected one Chrome package artifact but found multiple:"
+            printf '%s\n' "${matches[@]}"
+            exit 1
+          fi
+
+          cp "${matches[0]}" cleanedin-chrome.zip
 
       - name: Validate Chrome Web Store configuration
         run: |
@@ -62,8 +100,8 @@ jobs:
           done
 
           if [ "${#missing[@]}" -gt 0 ]; then
-            echo "Missing required GitHub Actions secrets: ${missing[*]}"
-            echo "Set these in repository Settings > Secrets and variables > Actions."
+            echo "Missing required GitHub Actions configuration values: ${missing[*]}"
+            echo "Set these in repository Settings > Secrets and variables > Actions (IDs may be stored as either secret or variable)."
             exit 1
           fi
 

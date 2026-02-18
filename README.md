@@ -77,6 +77,8 @@ npm run test:e2e
 - Output artifacts:
   - `cleanedin-chrome-vX.Y.Z.zip`
   - `cleanedin-edge-vX.Y.Z.zip`
+- `publish-chrome` and `publish-edge` consume these artifacts (no rebuild in publish workflows).
+- Manual publish runs require the upstream `store-packages` run ID as `store_run_id`.
 
 Release steps are documented in `docs/release-checklist.md`.
 

@@ -15,13 +15,14 @@
 3. Smoke test in Chrome + Edge with unpacked `dist/`.
 4. Push release commit + tag:
    - `git push origin main --follow-tags`
-5. Download store packages from the `store-packages` workflow artifact:
+5. Verify the `store-packages` workflow succeeded for this tag. It creates the shared store artifacts:
    - `cleanedin-chrome-vX.Y.Z.zip`
    - `cleanedin-edge-vX.Y.Z.zip`
-6. Upload each zip to the relevant extension store submission form.
-7. Verify store listing legal URLs:
+6. Verify `publish-chrome` and `publish-edge` workflows succeed. They now download the zip from `store-packages` artifacts instead of rebuilding.
+7. If you run publish workflows manually, pass `store_run_id` from the successful `store-packages` run.
+8. Verify store listing legal URLs:
    - Privacy policy: `https://cleanedin.yasingedik.com/privacy-policy.html`
    - Terms of service: `https://cleanedin.yasingedik.com/terms-of-service.html`
-8. Verify `deploy-firebase-hosting` workflow succeeded on `main` for website/legal page changes.
-9. Verify landing page is live at `https://cleanedin.yasingedik.com/`.
-10. Update changelog and release notes.
+9. Verify `deploy-firebase-hosting` workflow succeeded on `main` for website/legal page changes.
+10. Verify landing page is live at `https://cleanedin.yasingedik.com/`.
+11. Update changelog and release notes.

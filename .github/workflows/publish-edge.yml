@@ -3,6 +3,10 @@ name: publish-edge
 on:
   workflow_dispatch:
     inputs:
+      store_run_id:
+        description: 'store-packages run ID to fetch artifacts from (required for manual runs)'
+        required: true
+        type: string
       dry_run:
         description: 'Only upload package; do not call publish endpoint'
         required: false
@@ -16,32 +20,66 @@ on:
         required: false
         default: ''
         type: string
-  push:
-    tags:
-      - 'v*'
+  workflow_run:
+    workflows:
+      - store-packages
+    types:
+      - completed
 
 jobs:
   publish:
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     env:
       EDGE_API_ROOT: https://api.addons.microsoftedge.microsoft.com/v1
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-
-      - run: npm ci
-      - run: npm run build
-
-      - name: Package extension for Edge
+      - name: Resolve store-packages run ID
+        id: source
         run: |
-          cd dist
-          zip -r ../cleanedin-edge.zip .
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            run_id="${{ github.event.workflow_run.id }}"
+          else
+            run_id="${{ github.event.inputs.store_run_id }}"
+          fi
+
+          if [ -z "$run_id" ]; then
+            echo "A store-packages run ID is required."
+            exit 1
+          fi
+
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download store package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source.outputs.run_id }}
+          path: artifacts
+
+      - name: Resolve Edge package artifact
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+
+          matches=(artifacts/**/cleanedin-edge-v*.zip)
+          if [ "${#matches[@]}" -eq 0 ]; then
+            echo "No cleanedin-edge-v*.zip found in artifacts for run ${{ steps.source.outputs.run_id }}."
+            find artifacts -type f | sort || true
+            exit 1
+          fi
+
+          if [ "${#matches[@]}" -gt 1 ]; then
+            echo "Expected one Edge package artifact but found multiple:"
+            printf '%s\n' "${matches[@]}"
+            exit 1
+          fi
+
+          cp "${matches[0]}" cleanedin-edge.zip
 
       - name: Validate Edge product access
         run: |
