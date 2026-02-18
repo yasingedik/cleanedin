@@ -74,6 +74,11 @@ function textIncludesAny(post: Parameters<CategoryRule['match']>[0], phrases: st
   return phrases.some((phrase) => text.includes(phrase));
 }
 
+function leadContextIncludesAny(post: Parameters<CategoryRule['match']>[0], phrases: string[]): boolean {
+  const lead = getLeadContextText(post);
+  return phrases.some((phrase) => lead.includes(phrase));
+}
+
 export const suggestionRule: CategoryRule = {
   id: 'suggested.structural',
   category: 'suggested',
@@ -81,6 +86,7 @@ export const suggestionRule: CategoryRule = {
   match: (post) => {
     return (
       hasLeadActivityToken(post, SUGGESTED_LEAD_TOKENS, 40, false) ||
+      leadContextIncludesAny(post, ['suggested', 'suggested for you']) ||
       rootHasAnySelector(post, ['[data-test-id*="suggested"]', '[data-view-name*="suggest"]'])
     );
   }
@@ -113,7 +119,11 @@ export const likedRule: CategoryRule = {
   category: 'liked',
   priority: 60,
   match: (post) => {
-    return hasLeadActivityToken(post, LIKED_LEAD_TOKENS) || rootHasAnySelector(post, ['[data-activity-type="LIKE"]']);
+    return (
+      hasLeadActivityToken(post, LIKED_LEAD_TOKENS) ||
+      leadContextIncludesAny(post, [' liked this ', ' likes this ']) ||
+      rootHasAnySelector(post, ['[data-activity-type="LIKE"]'])
+    );
   }
 };
 
@@ -176,7 +186,8 @@ export const commentedRule: CategoryRule = {
   match: (post) => {
     return (
       rootHasAnySelector(post, ['[data-activity-type="COMMENT"]']) ||
-      hasLeadActivityToken(post, COMMENTED_LEAD_TOKENS)
+      hasLeadActivityToken(post, COMMENTED_LEAD_TOKENS) ||
+      leadContextIncludesAny(post, [' commented on this ', ' commented this '])
     );
   }
 };
@@ -189,7 +200,8 @@ export const followedRule: CategoryRule = {
     return (
       post.connectionLevel === 'following' ||
       rootHasAnySelector(post, ['[data-activity-type="FOLLOW"]']) ||
-      hasLeadActivityToken(post, FOLLOWED_LEAD_TOKENS)
+      hasLeadActivityToken(post, FOLLOWED_LEAD_TOKENS) ||
+      leadContextIncludesAny(post, [' followed this '])
     );
   }
 };

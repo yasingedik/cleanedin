@@ -2,7 +2,7 @@ import githubSponsorsIcon from './assets/github-sponsors.svg';
 import koFiIcon from './assets/ko-fi.svg';
 import { getConfiguredDonationOptions } from '../shared/donations';
 import { ALL_CATEGORIES } from '../shared/schema';
-import { getSettings, updateLocalSettings, updateSyncSettings } from '../shared/storage';
+import { getSettings, subscribeToStorageChanges, updateLocalSettings, updateSyncSettings } from '../shared/storage';
 import type {
   CategoryActions,
   ConnectionLevel,
@@ -80,6 +80,7 @@ function getElement<T extends HTMLElement>(id: string): T {
 
 const enabled = getElement<HTMLInputElement>('enabled');
 const showBadgeOnHidden = getElement<HTMLInputElement>('showBadgeOnHidden');
+const showInFeedOptionsPanel = getElement<HTMLInputElement>('showInFeedOptionsPanel');
 const categories = getElement<HTMLDivElement>('categories');
 
 const includeKeywords = getElement<HTMLTextAreaElement>('includeKeywords');
@@ -105,6 +106,11 @@ const status = getElement<HTMLParagraphElement>('status');
 let hydrating = false;
 let persistQueue: Promise<void> = Promise.resolve();
 let persistPending = false;
+let suppressStorageHydrationUntil = 0;
+
+function shouldSuppressStorageHydration(): boolean {
+  return Date.now() < suppressStorageHydrationUntil;
+}
 
 function parseList(input: string): string[] {
   const set = new Set(
@@ -124,6 +130,11 @@ function setStatus(text: string): void {
       status.textContent = '';
     }
   }, 1500);
+}
+
+function applyPopupModeClass(): void {
+  const mode = window.top === window ? 'standalone' : 'embedded';
+  document.documentElement.dataset.cleanedinPopupMode = mode;
 }
 
 function setActionSwitch(button: HTMLButtonElement, action: AnyAction): void {
@@ -350,6 +361,7 @@ function hydrate(settings: FilterSettings): void {
 
   enabled.checked = settings.enabled;
   showBadgeOnHidden.checked = settings.showBadgeOnHidden;
+  showInFeedOptionsPanel.checked = settings.showInFeedOptionsPanel;
   renderCategories(settings.categoryActions);
 
   includeKeywords.value = settings.includeKeywords.join('\n');
@@ -376,6 +388,7 @@ function readSyncSettings(): Partial<FilterSettingsSync> {
   return {
     enabled: enabled.checked,
     showBadgeOnHidden: showBadgeOnHidden.checked,
+    showInFeedOptionsPanel: showInFeedOptionsPanel.checked,
     categoryActions: selectedCategoryActions()
   };
 }
@@ -416,6 +429,7 @@ async function flushPersist(): Promise<void> {
   const local = readLocalSettings();
 
   try {
+    suppressStorageHydrationUntil = Date.now() + 1500;
     await Promise.all([updateSyncSettings(sync), updateLocalSettings(local)]);
     setStatus('Saved');
   } catch (error) {
@@ -499,6 +513,7 @@ function bindUIEvents(): void {
     try {
       const raw = JSON.parse(await file.text()) as Partial<FilterSettings>;
 
+      suppressStorageHydrationUntil = Date.now() + 1500;
       await Promise.all([
         updateSyncSettings(raw as unknown as Partial<FilterSettingsSync>),
         updateLocalSettings(raw as unknown as Partial<FilterSettingsLocal>)
@@ -515,9 +530,32 @@ function bindUIEvents(): void {
       importFile.value = '';
     }
   });
+
+  subscribeToStorageChanges((changes, area) => {
+    if (shouldSuppressStorageHydration()) {
+      return;
+    }
+
+    if (area !== 'sync' && area !== 'local') {
+      return;
+    }
+
+    if (Object.keys(changes).length === 0) {
+      return;
+    }
+
+    void (async () => {
+      try {
+        hydrate(await getSettings());
+      } catch (error) {
+        console.error('[cleanedin] Failed to sync popup state from storage:', error);
+      }
+    })();
+  });
 }
 
 async function boot(): Promise<void> {
+  applyPopupModeClass();
   applyPersistedSectionState();
   renderDonationLinks();
   bindUIEvents();

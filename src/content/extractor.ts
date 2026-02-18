@@ -346,15 +346,19 @@ function extractConnectionLevelFromSignal(signal: string): ConnectionLevel | nul
     new RegExp(`(?:^|[•·|])\\s*${token}\\b`).test(signal) || new RegExp(`\\b${token}\\b\\s*(?:[•·|]|$)`).test(signal);
 
   const hasFollowingToken = /\bfollowing(?!\s*up\b)/.test(signal);
+  const hasFollowersToken = /\bfollowers?\b/.test(signal);
   const hasConnectionMarkers = /[•·|]/.test(signal) || /\b(?:1st|2nd|3rd\+?)\b/.test(signal);
   const hasFollowingWithRelativeAge = /\bfollowing(?!\s*up\b)\s*\d+\s*(?:y|yr|yrs|mo|mos|w|wk|wks|d|h|m|s)\b/.test(signal);
   const hasFollowingAfterMarker = /(?:^|[•·|])\s*following(?!\s*up\b)/.test(signal);
+  const hasFollowingNearTimestamp =
+    /\bfollowing(?!\s*up\b)[^a-z0-9]{0,12}.{0,80}\b\d+\s*(?:y|yr|yrs|mo|mos|w|wk|wks|d|h|hr|hrs|m|min|mins)\b/.test(signal);
 
   if (
     !/\bfollowed\b/.test(signal) &&
     (hasFollowingAfterMarker ||
       /\bfollowing(?!\s*up\b)\s*(?:[•·|]|$)/.test(signal) ||
       hasFollowingWithRelativeAge ||
+      (!hasFollowersToken && hasFollowingNearTimestamp) ||
       (hasFollowingToken && hasConnectionMarkers))
   ) {
     return 'following';

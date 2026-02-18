@@ -21,6 +21,7 @@ function makeSettings(overrides: Partial<FilterSettings> = {}): FilterSettings {
       ad: 'hide'
     },
     showBadgeOnHidden: true,
+    showInFeedOptionsPanel: true,
     includeKeywords: [],
     includeKeywordsAction: 'off',
     excludeKeywords: [],

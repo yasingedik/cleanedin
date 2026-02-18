@@ -6,44 +6,102 @@ const HIDDEN_CLASS = 'cleanedin-hidden';
 const BADGE_CLASS = 'cleanedin-badge';
 const BADGE_FOR_ATTR = 'data-cleanedin-badge-for';
 const FLOATING_PANEL_ID = 'cleanedin-floating-options';
-const FLOATING_PANEL_VISIBILITY_STORAGE_KEY = 'cleanedin-floating-options-visible-v1';
+const LEFT_RAIL_CANDIDATE_SELECTORS = ['main .scaffold-layout__sidebar', 'main .scaffold-layout__aside', 'main aside'] as const;
+const IDENTITY_MODULE_ROOT_SELECTORS = ['[data-view-name="identity-module"]', '.feed-identity-module'] as const;
 
 const temporaryRevealRoots = new Set<HTMLElement>();
 const badgeByRoot = new WeakMap<HTMLElement, HTMLElement>();
 
-function readFloatingPanelVisibility(): boolean {
-  try {
-    const raw = window.localStorage.getItem(FLOATING_PANEL_VISIBILITY_STORAGE_KEY);
-    if (raw === null) {
-      return true;
-    }
+const PROFILE_SIGNAL_SELECTORS = [
+  '.feed-identity-module',
+  '[data-view-name="identity-module"]',
+  '[data-view-name*="identity-self-profile"]',
+  '[data-test-id*="identity"]',
+  '[data-view-name*="feed_identity"]',
+  'a[href*="/in/"]',
+  'a[href*="/mynetwork"]'
+] as const;
 
-    return raw !== 'false';
-  } catch {
-    return true;
-  }
+const SHORTCUT_SIGNAL_SELECTORS = ['a[href*="/groups"]', 'a[href*="/events"]', 'a[href*="/newsletters"]', 'a[href*="/mynetwork"]'] as const;
+const RAIL_MODULE_SIGNAL_SELECTORS = ['[data-view-name^="home-nav-left-rail-"]', ...SHORTCUT_SIGNAL_SELECTORS] as const;
+const RAIL_STACK_SIGNAL_SELECTORS = [...PROFILE_SIGNAL_SELECTORS, ...RAIL_MODULE_SIGNAL_SELECTORS] as const;
+const RAIL_VIEWNAME_MODULE_SELECTOR = '[data-view-name^="home-nav-left-rail-"]';
+
+function directElementChildren(container: ParentNode): HTMLElement[] {
+  return [...container.children].filter((child): child is HTMLElement => child instanceof HTMLElement);
 }
 
-function persistFloatingPanelVisibility(visible: boolean): void {
-  try {
-    window.localStorage.setItem(FLOATING_PANEL_VISIBILITY_STORAGE_KEY, String(visible));
-  } catch {
-    // Ignore localStorage failures in strict/private contexts.
+function profileSignalCount(candidate: ParentNode): number {
+  return candidate.querySelectorAll(PROFILE_SIGNAL_SELECTORS.join(', ')).length;
+}
+
+function hasSignal(candidate: ParentNode, selector: string): boolean {
+  if (candidate instanceof HTMLElement && candidate.matches(selector)) {
+    return true;
   }
+
+  return candidate.querySelector(selector) !== null;
+}
+
+function hasIdentitySignal(candidate: ParentNode): boolean {
+  return hasSignal(candidate, PROFILE_SIGNAL_SELECTORS.join(', '));
+}
+
+function hasRailModuleSignal(candidate: ParentNode): boolean {
+  return hasSignal(candidate, RAIL_MODULE_SIGNAL_SELECTORS.join(', '));
+}
+
+function signalCardChildCount(candidate: HTMLElement): number {
+  return directElementChildren(candidate).filter((child) => hasIdentitySignal(child) || hasRailModuleSignal(child)).length;
+}
+
+function isLikelyMainFeedContainer(candidate: HTMLElement): boolean {
+  return (
+    candidate.matches('[data-testid="mainFeed"], [data-finite-scroll-hotkey-context], [data-view-name="feed"]') ||
+    candidate.querySelector('[data-testid="mainFeed"], [data-finite-scroll-hotkey-context], [data-view-name="feed"]') !== null
+  );
+}
+
+function isLikelyLeftRailColumn(candidate: HTMLElement): boolean {
+  const rect = candidate.getBoundingClientRect();
+  if (rect.width !== 0 && (rect.width < 200 || rect.width > 460)) {
+    return false;
+  }
+
+  if (rect.left !== 0 && rect.left > window.innerWidth * 0.48) {
+    return false;
+  }
+
+  if (isLikelyMainFeedContainer(candidate)) {
+    return false;
+  }
+
+  return true;
 }
 
 function getRailScore(candidate: HTMLElement): number {
   const rect = candidate.getBoundingClientRect();
   const cardCount = candidate.querySelectorAll('.artdeco-card, .feed-identity-module, .premium-upsell-link').length;
-  const shortcutCount = candidate.querySelectorAll('a[href*="/groups"], a[href*="/events"], a[href*="/newsletters"], a[href*="/mynetwork"]').length;
+  const shortcutCount = candidate.querySelectorAll(SHORTCUT_SIGNAL_SELECTORS.join(', ')).length;
+  const profileSignals = profileSignalCount(candidate);
 
   let score = 0;
+  if (candidate.classList.contains('scaffold-layout__sidebar')) {
+    score += 40;
+  }
+  if (candidate.querySelector('.scaffold-layout__sticky')) {
+    score += 15;
+  }
+  score += profileSignals * 12;
   score += shortcutCount * 25;
   score += Math.min(cardCount, 10) * 4;
-  if (rect.left >= window.innerWidth * 0.35) {
-    score += 10;
+  if (rect.left <= window.innerWidth * 0.35 || rect.left === 0) {
+    score += 12;
   }
-  if (rect.width >= 220 && rect.width <= 420) {
+  if (rect.left >= window.innerWidth * 0.5) {
+    score -= 12;
+  }
+  if (rect.width >= 200 && rect.width <= 420) {
     score += 8;
   }
 
@@ -51,17 +109,248 @@ function getRailScore(candidate: HTMLElement): number {
 }
 
 function resolveLinkedInLeftRailHost(): HTMLElement | null {
-  const candidates = [
-    ...document.querySelectorAll<HTMLElement>('main .scaffold-layout__aside'),
-    ...document.querySelectorAll<HTMLElement>('main .scaffold-layout__sidebar'),
-    ...document.querySelectorAll<HTMLElement>('main aside')
-  ].filter((candidate) => candidate.isConnected);
+  const sidebarCandidates = [...document.querySelectorAll<HTMLElement>('main .scaffold-layout__sidebar')].filter(
+    (candidate) => candidate.isConnected && isLikelyLeftRailColumn(candidate)
+  );
+  const profileSidebars = sidebarCandidates.filter((candidate) => profileSignalCount(candidate) > 0);
+  if (profileSidebars.length > 0) {
+    return [...profileSidebars].sort((a, b) => getRailScore(b) - getRailScore(a))[0] ?? null;
+  }
+
+  if (sidebarCandidates.length > 0) {
+    return [...sidebarCandidates].sort((a, b) => getRailScore(b) - getRailScore(a))[0] ?? null;
+  }
+
+  const candidates = [...new Set(LEFT_RAIL_CANDIDATE_SELECTORS.flatMap((selector) => [...document.querySelectorAll<HTMLElement>(selector)]))].filter((candidate) => {
+    return candidate.isConnected && isLikelyLeftRailColumn(candidate);
+  });
 
   if (candidates.length === 0) {
     return null;
   }
 
-  return [...candidates].sort((a, b) => getRailScore(b) - getRailScore(a))[0] ?? null;
+  const profileCandidates = candidates.filter((candidate) => profileSignalCount(candidate) > 0);
+  const rankedPool = profileCandidates.length > 0 ? profileCandidates : candidates;
+  return [...rankedPool].sort((a, b) => getRailScore(b) - getRailScore(a))[0] ?? null;
+}
+
+function resolveSignalBasedRailHost(): HTMLElement | null {
+  const main = document.querySelector('main');
+  const identityRoots = [...document.querySelectorAll<HTMLElement>(IDENTITY_MODULE_ROOT_SELECTORS.join(', '))].filter(
+    (root) => root.isConnected && (!main || main.contains(root))
+  );
+
+  if (identityRoots.length === 0) {
+    return null;
+  }
+
+  const candidates = new Set<HTMLElement>();
+  for (const identityRoot of identityRoots) {
+    let node = identityRoot.parentElement;
+    while (node && node !== document.body && node !== document.documentElement) {
+      if (main && !main.contains(node)) {
+        break;
+      }
+
+      if (hasRailModuleSignal(node)) {
+        candidates.add(node);
+      }
+      node = node.parentElement;
+    }
+  }
+
+  const ranked = [...candidates]
+    .filter((candidate) => isLikelyLeftRailColumn(candidate))
+    .map((candidate) => {
+      const rect = candidate.getBoundingClientRect();
+      const directSignalChildren = signalCardChildCount(candidate);
+      const boundedWidth = rect.width >= 200 && rect.width <= 520;
+      const boundedHeight = rect.height >= 280;
+
+      let depth = 0;
+      let node: HTMLElement | null = candidate;
+      while (node && node !== main && node !== document.body) {
+        depth += 1;
+        node = node.parentElement;
+      }
+
+      const score =
+        directSignalChildren * 90 +
+        (hasIdentitySignal(candidate) ? 30 : 0) +
+        (hasRailModuleSignal(candidate) ? 30 : 0) +
+        (boundedWidth ? 10 : 0) +
+        (boundedHeight ? 8 : 0);
+
+      return { candidate, score, depth };
+    })
+    .sort((a, b) => b.score - a.score || b.depth - a.depth);
+
+  return ranked[0]?.candidate ?? null;
+}
+
+function collectAncestorChain(node: HTMLElement, boundary: HTMLElement): HTMLElement[] {
+  const ancestors: HTMLElement[] = [];
+  let current: HTMLElement | null = node;
+
+  while (current) {
+    ancestors.push(current);
+    if (current === boundary) {
+      break;
+    }
+    current = current.parentElement;
+  }
+
+  return ancestors;
+}
+
+function findLowestCommonAncestorWithin(first: HTMLElement, second: HTMLElement, boundary: HTMLElement): HTMLElement | null {
+  const firstAncestors = new Set(collectAncestorChain(first, boundary));
+  for (const ancestor of collectAncestorChain(second, boundary)) {
+    if (firstAncestors.has(ancestor)) {
+      return ancestor;
+    }
+  }
+
+  return null;
+}
+
+function resolveSignalStackContainer(container: HTMLElement): HTMLElement | null {
+  const identityRoot = container.querySelector<HTMLElement>(IDENTITY_MODULE_ROOT_SELECTORS.join(', '));
+  if (!identityRoot) {
+    return null;
+  }
+
+  const viewNameModule = [...container.querySelectorAll<HTMLElement>(RAIL_VIEWNAME_MODULE_SELECTOR)].find(
+    (node) => !identityRoot.contains(node)
+  );
+  const shortcutModule =
+    viewNameModule ??
+    [...container.querySelectorAll<HTMLElement>(SHORTCUT_SIGNAL_SELECTORS.join(', '))].find((node) => !identityRoot.contains(node));
+
+  if (!shortcutModule) {
+    return null;
+  }
+
+  const stackRoot = findLowestCommonAncestorWithin(identityRoot, shortcutModule, container);
+  return stackRoot ?? null;
+}
+
+function resolveMountStackTarget(container: HTMLElement): HTMLElement {
+  const signalStack = resolveSignalStackContainer(container);
+  if (signalStack) {
+    return signalStack;
+  }
+
+  const candidates: HTMLElement[] = [container, ...container.querySelectorAll<HTMLElement>('div, section, aside')];
+  const rankedCandidates = candidates
+    .map((candidate) => {
+      if (candidate.matches(RAIL_STACK_SIGNAL_SELECTORS.join(', '))) {
+        return null;
+      }
+
+      const children = directElementChildren(candidate);
+      const directSignalChildren = children.filter((child) =>
+        child.matches(RAIL_STACK_SIGNAL_SELECTORS.join(', ')) || Boolean(child.querySelector(RAIL_STACK_SIGNAL_SELECTORS.join(', ')))
+      ).length;
+      const directIdentityChildren = children.filter((child) => hasIdentitySignal(child)).length;
+      const directModuleChildren = children.filter((child) => hasRailModuleSignal(child)).length;
+
+      if (
+        !hasIdentitySignal(candidate) ||
+        !hasRailModuleSignal(candidate) ||
+        directSignalChildren < 2 ||
+        directIdentityChildren < 1 ||
+        directModuleChildren < 1
+      ) {
+        return null;
+      }
+
+      let depth = 0;
+      let node: HTMLElement | null = candidate;
+      while (node && node !== container) {
+        depth += 1;
+        node = node.parentElement;
+      }
+
+      return {
+        candidate,
+        directSignalChildren,
+        directIdentityChildren,
+        directModuleChildren,
+        depth
+      };
+    })
+    .filter(
+      (entry): entry is {
+        candidate: HTMLElement;
+        directSignalChildren: number;
+        directIdentityChildren: number;
+        directModuleChildren: number;
+        depth: number;
+      } => entry !== null
+    )
+    .sort(
+      (a, b) =>
+        b.directSignalChildren - a.directSignalChildren ||
+        b.directModuleChildren - a.directModuleChildren ||
+        b.directIdentityChildren - a.directIdentityChildren ||
+        b.depth - a.depth
+    );
+
+  if (rankedCandidates.length > 0) {
+    return rankedCandidates[0].candidate;
+  }
+
+  return container;
+}
+
+function normalizeRailMountTarget(target: HTMLElement): HTMLElement {
+  let node: HTMLElement = target;
+
+  while (node.parentElement) {
+    const styles = window.getComputedStyle(node);
+    if (styles.display === 'contents' || styles.position === 'absolute') {
+      node = node.parentElement;
+      continue;
+    }
+
+    break;
+  }
+
+  return node;
+}
+
+function resolveRailInsertionAnchor(container: HTMLElement): HTMLElement | null {
+  const railCards = directElementChildren(container).filter((child) => hasIdentitySignal(child) || hasRailModuleSignal(child));
+  if (railCards.length > 0) {
+    return railCards[railCards.length - 1] ?? null;
+  }
+
+  for (const child of directElementChildren(container)) {
+    const nestedRailCards = directElementChildren(child).filter((nestedChild) => hasIdentitySignal(nestedChild) || hasRailModuleSignal(nestedChild));
+    if (nestedRailCards.length > 0) {
+      return nestedRailCards[nestedRailCards.length - 1] ?? null;
+    }
+  }
+
+  return null;
+}
+
+function resolveLinkedInLeftRailMountTarget(): HTMLElement | null {
+  const railHost = resolveLinkedInLeftRailHost() ?? resolveSignalBasedRailHost();
+  if (!railHost) {
+    return null;
+  }
+
+  const stickyHost =
+    railHost.querySelector<HTMLElement>(':scope > .scaffold-layout__sticky') ?? railHost.querySelector<HTMLElement>('.scaffold-layout__sticky');
+
+  if (!stickyHost) {
+    return normalizeRailMountTarget(resolveMountStackTarget(railHost));
+  }
+
+  const stackTarget = resolveMountStackTarget(stickyHost);
+  return normalizeRailMountTarget(stackTarget);
 }
 
 function getFloatingPanelRoot(): HTMLElement {
@@ -75,19 +364,6 @@ function getFloatingPanelRoot(): HTMLElement {
   const title = document.createElement('strong');
   title.textContent = 'CleanedIn Options';
 
-  const toggleLabel = document.createElement('label');
-  toggleLabel.className = 'cleanedin-floating-options__toggle';
-  toggleLabel.textContent = 'Visible';
-
-  const toggle = document.createElement('input');
-  toggle.type = 'checkbox';
-  toggle.checked = readFloatingPanelVisibility();
-
-  const launcher = document.createElement('button');
-  launcher.type = 'button';
-  launcher.className = 'cleanedin-floating-options__launcher';
-  launcher.textContent = 'CleanedIn options';
-
   const frameWrap = document.createElement('div');
   frameWrap.className = 'cleanedin-floating-options__frame-wrap';
 
@@ -96,25 +372,10 @@ function getFloatingPanelRoot(): HTMLElement {
   iframe.src = chrome.runtime.getURL('src/popup/index.html');
   iframe.title = 'CleanedIn options';
 
-  toggleLabel.appendChild(toggle);
-  header.append(title, toggleLabel);
+  header.append(title);
   frameWrap.appendChild(iframe);
-  panel.append(header, frameWrap, launcher);
+  panel.append(header, frameWrap);
 
-  const syncVisibility = () => {
-    const visible = toggle.checked;
-    panel.dataset.visible = visible ? 'true' : 'false';
-    launcher.hidden = visible;
-    persistFloatingPanelVisibility(visible);
-  };
-
-  toggle.addEventListener('change', syncVisibility);
-  launcher.addEventListener('click', () => {
-    toggle.checked = true;
-    syncVisibility();
-  });
-
-  syncVisibility();
   return panel;
 }
 
@@ -411,21 +672,25 @@ export function clearAllHiddenBadges(): void {
 
 export function ensureFloatingOptionsPanel(): void {
   ensureStyleInjection();
-  if (document.getElementById(FLOATING_PANEL_ID)) {
-    return;
-  }
+  const existing = document.getElementById(FLOATING_PANEL_ID);
+  const panel = existing instanceof HTMLElement ? existing : getFloatingPanelRoot();
+  const railMountTarget = resolveLinkedInLeftRailMountTarget();
 
-  const panel = getFloatingPanelRoot();
-  const railHost = resolveLinkedInLeftRailHost();
-
-  if (railHost) {
-    railHost.append(panel);
+  if (railMountTarget) {
+    const anchor = resolveRailInsertionAnchor(railMountTarget);
+    if (anchor?.parentElement) {
+      anchor.parentElement.insertBefore(panel, anchor.nextSibling);
+    } else {
+      railMountTarget.append(panel);
+    }
     panel.dataset.mount = 'rail';
     return;
   }
 
   panel.dataset.mount = 'fixed';
-  document.body.appendChild(panel);
+  if (panel.parentElement !== document.body) {
+    document.body.appendChild(panel);
+  }
 }
 
 export function removeFloatingOptionsPanel(): void {

@@ -9,6 +9,8 @@ export const FEED_ROOT_SELECTORS = [
 ];
 
 export const POST_ROOT_SELECTORS = [
+  '[data-view-name="feed-full-update"]',
+  '[role="listitem"]',
   'article[data-urn^="urn:li:activity:"]',
   'article[data-id^="urn:li:activity:"]',
   'article[data-activity-urn^="urn:li:activity:"]',
@@ -33,9 +35,11 @@ export const POST_ROOT_SELECTOR = POST_ROOT_SELECTORS.join(', ');
 const POST_LINK_SELECTOR = ['a[href*="/feed/update/"]', 'a[href*="/posts/"]', 'a[href*="urn:li:activity:"]'].join(', ');
 const FEED_TRACKING_SELECTOR = [
   '[data-view-tracking-scope*="FEED_UPDATE_SERVED"]',
-  '[data-view-tracking-scope*="SPONSORED_UPDATE_SERVED"]'
+  '[data-view-tracking-scope*="SPONSORED_UPDATE_SERVED"]',
+  '[data-view-tracking-scope*="UPDATE_SERVED"]'
 ].join(', ');
 const POST_CONTAINER_HINT_SELECTOR = [
+  '[data-view-name="feed-full-update"]',
   '[data-urn]',
   '[data-id]',
   '[data-activity-urn]',
@@ -48,6 +52,13 @@ const POST_CONTAINER_HINT_SELECTOR = [
   'article',
   '[role="article"]',
   'li'
+].join(', ');
+const NON_FEED_RAIL_SELECTOR = [
+  '.scaffold-layout__sidebar',
+  '.scaffold-layout__aside',
+  '.feed-identity-module',
+  '[data-view-name="identity-module"]',
+  '[data-view-name^="home-nav-left-rail-"]'
 ].join(', ');
 
 function normalizeUrlPath(urlLike: string): string {
@@ -75,6 +86,14 @@ function isExtensionUiNode(root: HTMLElement): boolean {
 }
 
 function hasStrongPostIdentity(root: HTMLElement): boolean {
+  if (root.matches('[data-view-name="feed-full-update"]')) {
+    return true;
+  }
+
+  if (root.matches('[role="listitem"]') && root.querySelector('[data-view-name="feed-full-update"]')) {
+    return true;
+  }
+
   if (
     root.hasAttribute('data-urn') ||
     root.hasAttribute('data-id') ||
@@ -90,7 +109,11 @@ function hasStrongPostIdentity(root: HTMLElement): boolean {
 
 function hasFeedTrackingSignal(root: HTMLElement): boolean {
   const trackingScope = root.getAttribute('data-view-tracking-scope') ?? '';
-  return trackingScope.includes('FEED_UPDATE_SERVED') || trackingScope.includes('SPONSORED_UPDATE_SERVED');
+  return (
+    trackingScope.includes('FEED_UPDATE_SERVED') ||
+    trackingScope.includes('SPONSORED_UPDATE_SERVED') ||
+    trackingScope.includes('UPDATE_SERVED')
+  );
 }
 
 function isGlobalContainer(root: HTMLElement): boolean {
@@ -107,6 +130,10 @@ function isLikelyPostContainer(root: HTMLElement): boolean {
     return false;
   }
 
+  if (root.closest(NON_FEED_RAIL_SELECTOR)) {
+    return false;
+  }
+
   if (isGlobalContainer(root)) {
     return false;
   }
@@ -117,14 +144,13 @@ function isLikelyPostContainer(root: HTMLElement): boolean {
   }
 
   const hasFeedTracking = hasFeedTrackingSignal(root);
-  const isArticleLike = root.matches('article, [role="article"]');
+  const isArticleLike = root.matches('article, [role="article"], [role="listitem"]');
+  const hasUpdateLink = Boolean(root.querySelector(POST_LINK_SELECTOR));
   const textLength = (root.textContent ?? '').trim().length;
-  if (textLength < 40) {
+  if (textLength < 40 && !hasUpdateLink && !hasFeedTracking && !isArticleLike) {
     return false;
   }
 
-  // Expanded comment threads can produce very long tracked post containers.
-  // Keep rejecting oversized generic wrappers, but allow tracked/article roots.
   if (textLength > 12_000 && !hasFeedTracking && !isArticleLike) {
     return false;
   }
@@ -140,18 +166,21 @@ function isLikelyPostContainer(root: HTMLElement): boolean {
     Boolean(root.querySelector('button[aria-label*="Repost"]')) ||
     Boolean(root.querySelector('button[aria-label*="Send"]')) ||
     root.querySelectorAll('button').length >= 2;
-  const hasUpdateLink = Boolean(root.querySelector(POST_LINK_SELECTOR));
+  const buttonCount = root.querySelectorAll('button').length;
   const hasRichContent =
     Boolean(root.querySelector('img')) ||
     Boolean(root.querySelector('video')) ||
     Boolean(root.querySelector('iframe')) ||
     Boolean(root.querySelector('[aria-roledescription="carousel"]'));
-
   if (isArticleLike && textLength >= 80 && (hasActor || hasTime || hasUpdateLink)) {
     return true;
   }
 
   if (hasFeedTracking && (textLength >= 120 || hasActor || hasTime || isArticleLike)) {
+    return true;
+  }
+
+  if (root.matches('li, [role="listitem"]') && hasUpdateLink && (hasActor || hasTime || hasRichContent || buttonCount >= 1 || textLength >= 140)) {
     return true;
   }
 
@@ -227,7 +256,7 @@ export function findPostRoots(container: ParentNode): HTMLElement[] {
   }
 
   if (roots.size === 0) {
-    for (const fallback of maybeQueryAll<HTMLElement>(container, 'article, [role="article"]')) {
+    for (const fallback of maybeQueryAll<HTMLElement>(container, 'article, [role="article"], [role="listitem"]')) {
       if (isLikelyPostContainer(fallback)) {
         roots.add(fallback);
       }
@@ -238,7 +267,11 @@ export function findPostRoots(container: ParentNode): HTMLElement[] {
 }
 
 export function isPostRootNode(node: Element): node is HTMLElement {
-  return Boolean(closestLikelyPostContainer(node));
+  if (!(node instanceof HTMLElement)) {
+    return false;
+  }
+
+  return closestLikelyPostContainer(node) === node;
 }
 
 export function findNearestPostRoot(node: Element): HTMLElement | null {

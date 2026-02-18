@@ -37,6 +37,7 @@ const settings: FilterSettings = {
     ad: 'hide'
   },
   showBadgeOnHidden: true,
+  showInFeedOptionsPanel: true,
   includeKeywords: [],
   includeKeywordsAction: 'off',
   excludeKeywords: [],
@@ -92,7 +93,6 @@ afterEach(() => {
   clearTemporaryReveals();
   clearAllHiddenBadges();
   removeFloatingOptionsPanel();
-  window.localStorage.removeItem('cleanedin-floating-options-visible-v1');
   document.body.innerHTML = '';
 });
 
@@ -197,7 +197,7 @@ describe('render temporary reveal lifecycle', () => {
 describe('floating options panel', () => {
 
 
-  it('mounts inside the rail that contains LinkedIn shortcut cards', () => {
+  it('mounts as the last box inside the left rail stack', () => {
     const originalChrome = globalThis.chrome;
     Object.defineProperty(globalThis, 'chrome', {
       configurable: true,
@@ -209,25 +209,35 @@ describe('floating options panel', () => {
     });
 
     const main = document.createElement('main');
-    const wrongAside = document.createElement('aside');
-    wrongAside.className = 'scaffold-layout__aside';
+    const rightAside = document.createElement('aside');
+    rightAside.className = 'scaffold-layout__aside';
+    rightAside.innerHTML = `<div class="artdeco-card"></div>`;
 
-    const targetAside = document.createElement('aside');
-    targetAside.className = 'scaffold-layout__aside';
-    targetAside.innerHTML = `
-      <div class="artdeco-card"></div>
-      <a href="https://www.linkedin.com/groups/">Groups</a>
-      <a href="https://www.linkedin.com/events/">Events</a>
-      <a href="https://www.linkedin.com/newsletters/">Newsletters</a>
+    const leftSidebar = document.createElement('div');
+    leftSidebar.className = 'scaffold-layout__sidebar';
+    leftSidebar.innerHTML = `
+      <div class="scaffold-layout__sticky">
+        <div class="rail-stack">
+          <div class="artdeco-card" data-row="1"></div>
+          <div class="artdeco-card" data-row="2"></div>
+          <div class="artdeco-card" data-row="3"></div>
+          <a href="https://www.linkedin.com/in/jane-doe/">Jane Doe</a>
+          <a href="https://www.linkedin.com/groups/">Groups</a>
+          <a href="https://www.linkedin.com/events/">Events</a>
+          <a href="https://www.linkedin.com/newsletters/">Newsletters</a>
+        </div>
+      </div>
     `;
 
-    main.append(wrongAside, targetAside);
+    main.append(leftSidebar, rightAside);
     document.body.appendChild(main);
 
     ensureFloatingOptionsPanel();
 
-    expect(targetAside.querySelector('#cleanedin-floating-options')).not.toBeNull();
-    expect(wrongAside.querySelector('#cleanedin-floating-options')).toBeNull();
+    const stack = leftSidebar.querySelector('.rail-stack');
+    expect(stack?.lastElementChild?.id).toBe('cleanedin-floating-options');
+    expect(stack?.querySelector('#cleanedin-floating-options')?.getAttribute('data-mount')).toBe('rail');
+    expect(rightAside.querySelector('#cleanedin-floating-options')).toBeNull();
 
     Object.defineProperty(globalThis, 'chrome', {
       configurable: true,
@@ -235,7 +245,56 @@ describe('floating options panel', () => {
     });
   });
 
-  it('mounts the options panel and persists visibility toggle state', () => {
+  it('falls back to signal-based rail placement when scaffold classes are absent', () => {
+    const originalChrome = globalThis.chrome;
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
+        runtime: {
+          getURL: (path: string) => `chrome-extension://test/${path}`
+        }
+      }
+    });
+
+    document.body.innerHTML = `
+      <main>
+        <div id="layout">
+          <div id="left-column">
+            <div id="left-stack">
+              <section id="card-1">
+                <div data-view-name="identity-module">
+                  <a href="https://www.linkedin.com/in/jane-doe/">Jane Doe</a>
+                </div>
+              </section>
+              <section id="card-2">
+                <a data-view-name="home-nav-left-rail-growth-widgets-profile-views" href="https://www.linkedin.com/me/profile-views/">
+                  Profile viewers
+                </a>
+              </section>
+              <section id="card-3">
+                <a data-view-name="home-nav-left-rail-common-module-groups" href="https://www.linkedin.com/groups/">
+                  Groups
+                </a>
+              </section>
+            </div>
+          </div>
+        </div>
+      </main>
+    `;
+
+    ensureFloatingOptionsPanel();
+
+    const stack = document.getElementById('left-stack');
+    expect(stack?.lastElementChild?.id).toBe('cleanedin-floating-options');
+    expect(stack?.querySelector('#cleanedin-floating-options')?.getAttribute('data-mount')).toBe('rail');
+
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: originalChrome
+    });
+  });
+
+  it('does not render a header visibility switch in embedded mode', () => {
     const originalChrome = globalThis.chrome;
     Object.defineProperty(globalThis, 'chrome', {
       configurable: true,
@@ -250,15 +309,7 @@ describe('floating options panel', () => {
 
     const panel = document.getElementById('cleanedin-floating-options');
     expect(panel).not.toBeNull();
-
-    const toggle = panel?.querySelector<HTMLInputElement>('input[type="checkbox"]');
-    expect(toggle).not.toBeNull();
-    expect(toggle?.checked).toBe(true);
-
-    toggle?.click();
-
-    expect(panel?.dataset.visible).toBe('false');
-    expect(window.localStorage.getItem('cleanedin-floating-options-visible-v1')).toBe('false');
+    expect(panel?.querySelector('input[type="checkbox"]')).toBeNull();
 
     removeFloatingOptionsPanel();
     Object.defineProperty(globalThis, 'chrome', {

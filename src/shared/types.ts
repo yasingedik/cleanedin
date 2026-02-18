@@ -35,6 +35,7 @@ export interface FilterSettingsSync {
   enabled: boolean;
   categoryActions: CategoryActions;
   showBadgeOnHidden: boolean;
+  showInFeedOptionsPanel: boolean;
 }
 
 export interface FilterSettingsLocal {

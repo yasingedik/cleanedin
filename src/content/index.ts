@@ -327,12 +327,15 @@ function scheduleStartupSettingsSync(): void {
 function bindObserverWhenFeedRootReady(): void {
   stopWaitingForFeedRoot();
 
-  if (!isSupportedFeedPath()) {
+  if (!isSupportedFeedPath() || !activeSettings.showInFeedOptionsPanel) {
     removeFloatingOptionsPanel();
-    return;
+  } else {
+    ensureFloatingOptionsPanel();
   }
 
-  ensureFloatingOptionsPanel();
+  if (!isSupportedFeedPath()) {
+    return;
+  }
 
   if (useBodyRootFallback) {
     ensureObserver().start();
@@ -358,6 +361,13 @@ async function refreshSettingsAndReevaluate(): Promise<void> {
   try {
     activeSettings = await getSettings();
     debugLog('settings-updated', activeSettings);
+
+    if (!isSupportedFeedPath() || !activeSettings.showInFeedOptionsPanel) {
+      removeFloatingOptionsPanel();
+    } else {
+      ensureFloatingOptionsPanel();
+    }
+
     for (const hiddenRoot of document.querySelectorAll<HTMLElement>('.cleanedin-hidden[data-cleanedin-hidden="true"]')) {
       hiddenRoot.classList.remove('cleanedin-hidden');
       hiddenRoot.removeAttribute('data-cleanedin-hidden');

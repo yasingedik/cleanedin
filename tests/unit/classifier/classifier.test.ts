@@ -32,6 +32,18 @@ describe('classifyPost', () => {
     expect(result.labels.has('ad')).toBe(true);
   });
 
+  it('labels promoted company posts using lead markers when structural ad attrs are absent', () => {
+    const post = buildPost(`
+      <a href="https://www.linkedin.com/company/skf/posts/">SKF Group</a>
+      <p>710,237 followers</p>
+      <p>Promoted</p>
+      <a data-view-name="feed-call-to-action" href="https://example.com">Learn more</a>
+    `);
+
+    const result = classifyPost(post);
+    expect(result.labels.has('ad')).toBe(true);
+  });
+
   it('labels video posts by structure', () => {
     const post = buildPost('<video src="blob:test"></video>');
     const result = classifyPost(post);
