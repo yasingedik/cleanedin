@@ -35,6 +35,9 @@ jobs:
       actions: read
     env:
       EDGE_API_ROOT: https://api.addons.microsoftedge.microsoft.com/v1
+      EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+      EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+      EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID || vars.EDGE_PRODUCT_ID }}
     steps:
       - name: Resolve store-packages run ID
         id: source
@@ -81,14 +84,37 @@ jobs:
 
           cp "${matches[0]}" cleanedin-edge.zip
 
+      - name: Validate Edge Add-ons configuration
+        run: |
+          set -euo pipefail
+
+          missing=()
+          for secret_name in EDGE_API_KEY EDGE_CLIENT_ID EDGE_PRODUCT_ID; do
+            if [ -z "${!secret_name:-}" ]; then
+              missing+=("$secret_name")
+            fi
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Missing required Edge configuration values: ${missing[*]}"
+            echo "Set these in repository Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+          if [[ ! "$EDGE_PRODUCT_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+            echo "EDGE_PRODUCT_ID does not look like a Partner Center product GUID."
+            echo "Use the Partner Center product ID (GUID), not the public store extension ID."
+            exit 1
+          fi
+
       - name: Validate Edge product access
         run: |
           set -euo pipefail
 
-          product_url="${EDGE_API_ROOT}/products/${{ secrets.EDGE_PRODUCT_ID }}"
+          product_url="${EDGE_API_ROOT}/products/${EDGE_PRODUCT_ID}"
           http_code="$(curl -sS -o edge-product-response.json -w '%{http_code}' \
-            -H "Authorization: ApiKey ${{ secrets.EDGE_API_KEY }}" \
-            -H "X-ClientID: ${{ secrets.EDGE_CLIENT_ID }}" \
+            -H "Authorization: ApiKey ${EDGE_API_KEY}" \
+            -H "X-ClientID: ${EDGE_CLIENT_ID}" \
             -X GET \
             "$product_url")"
 
@@ -108,11 +134,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          upload_url="${EDGE_API_ROOT}/products/${{ secrets.EDGE_PRODUCT_ID }}/submissions/draft/package"
+          upload_url="${EDGE_API_ROOT}/products/${EDGE_PRODUCT_ID}/submissions/draft/package"
 
           http_code="$(curl -sS -D edge-upload-headers.txt -o edge-upload-body.json -w '%{http_code}' \
-            -H "Authorization: ApiKey ${{ secrets.EDGE_API_KEY }}" \
-            -H "X-ClientID: ${{ secrets.EDGE_CLIENT_ID }}" \
+            -H "Authorization: ApiKey ${EDGE_API_KEY}" \
+            -H "X-ClientID: ${EDGE_CLIENT_ID}" \
             -H "Content-Type: application/zip" \
             -X POST \
             -T cleanedin-edge.zip \
@@ -152,12 +178,12 @@ jobs:
           set -euo pipefail
 
           operation_id="${{ steps.upload.outputs.upload_operation_id }}"
-          status_url="${EDGE_API_ROOT}/products/${{ secrets.EDGE_PRODUCT_ID }}/submissions/draft/package/operations/${operation_id}"
+          status_url="${EDGE_API_ROOT}/products/${EDGE_PRODUCT_ID}/submissions/draft/package/operations/${operation_id}"
 
           for attempt in $(seq 1 40); do
             http_code="$(curl -sS -o edge-upload-status.json -w '%{http_code}' \
-              -H "Authorization: ApiKey ${{ secrets.EDGE_API_KEY }}" \
-              -H "X-ClientID: ${{ secrets.EDGE_CLIENT_ID }}" \
+              -H "Authorization: ApiKey ${EDGE_API_KEY}" \
+              -H "X-ClientID: ${EDGE_CLIENT_ID}" \
               -X GET \
               "$status_url")"
 
@@ -196,7 +222,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          publish_url="${EDGE_API_ROOT}/products/${{ secrets.EDGE_PRODUCT_ID }}/submissions"
+          publish_url="${EDGE_API_ROOT}/products/${EDGE_PRODUCT_ID}/submissions"
           publish_notes="${PUBLISH_NOTES:-}"
           if [ -z "$publish_notes" ]; then
             publish_notes="Automated publish from GitHub Actions run ${{ github.run_id }}"
@@ -205,8 +231,8 @@ jobs:
           publish_body="$(jq -n --arg notes "$publish_notes" '{notes: $notes}')"
 
           http_code="$(curl -sS -D edge-publish-headers.txt -o edge-publish-body.json -w '%{http_code}' \
-            -H "Authorization: ApiKey ${{ secrets.EDGE_API_KEY }}" \
-            -H "X-ClientID: ${{ secrets.EDGE_CLIENT_ID }}" \
+            -H "Authorization: ApiKey ${EDGE_API_KEY}" \
+            -H "X-ClientID: ${EDGE_CLIENT_ID}" \
             -H "Content-Type: application/json" \
             -X POST \
             --data "$publish_body" \
@@ -242,12 +268,12 @@ jobs:
           set -euo pipefail
 
           operation_id="${{ steps.publish.outputs.publish_operation_id }}"
-          status_url="${EDGE_API_ROOT}/products/${{ secrets.EDGE_PRODUCT_ID }}/submissions/operations/${operation_id}"
+          status_url="${EDGE_API_ROOT}/products/${EDGE_PRODUCT_ID}/submissions/operations/${operation_id}"
 
           for attempt in $(seq 1 60); do
             http_code="$(curl -sS -o edge-publish-status.json -w '%{http_code}' \
-              -H "Authorization: ApiKey ${{ secrets.EDGE_API_KEY }}" \
-              -H "X-ClientID: ${{ secrets.EDGE_CLIENT_ID }}" \
+              -H "Authorization: ApiKey ${EDGE_API_KEY}" \
+              -H "X-ClientID: ${EDGE_CLIENT_ID}" \
               -X GET \
               "$status_url")"
 

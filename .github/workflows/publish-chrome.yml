@@ -134,7 +134,43 @@ jobs:
           echo "::add-mask::$access_token"
           echo "access_token=$access_token" >> "$GITHUB_OUTPUT"
 
+      - name: Check current Chrome Web Store item status
+        id: cws_status
+        run: |
+          set -euo pipefail
+
+          status_url="https://chromewebstore.googleapis.com/v2/publishers/${CWS_PUBLISHER_ID}/items/${CWS_EXTENSION_ID}:fetchStatus"
+          status_http_code="$(curl -sS -o chrome-preupload-status-response.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
+            -X GET \
+            "$status_url")"
+
+          if [ "$status_http_code" != "200" ]; then
+            echo "Chrome fetchStatus request failed before upload (HTTP $status_http_code)."
+            cat chrome-preupload-status-response.json || true
+            exit 1
+          fi
+
+          submitted_state="$(jq -r '.submittedItemRevisionStatus.state // empty' chrome-preupload-status-response.json)"
+          published_state="$(jq -r '.publishedItemRevisionStatus.state // empty' chrome-preupload-status-response.json)"
+          echo "Submitted revision state: ${submitted_state:-<none>}"
+          echo "Published revision state: ${published_state:-<none>}"
+
+          if [ "$submitted_state" = "PENDING_REVIEW" ]; then
+            echo "blocked_in_review=true" >> "$GITHUB_OUTPUT"
+            echo "Item has a pending review submission. Skipping upload/publish for this run."
+            exit 0
+          fi
+
+          echo "blocked_in_review=false" >> "$GITHUB_OUTPUT"
+
+      - name: Skip upload because item is pending review
+        if: ${{ steps.cws_status.outputs.blocked_in_review == 'true' }}
+        run: |
+          echo "No upload attempted because the current submitted revision state is PENDING_REVIEW."
+
       - name: Upload package to Chrome Web Store
+        if: ${{ steps.cws_status.outputs.blocked_in_review != 'true' }}
         run: |
           set -euo pipefail
 
@@ -167,7 +203,7 @@ jobs:
           fi
 
       - name: Publish item in Chrome Web Store
-        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
+        if: ${{ steps.cws_status.outputs.blocked_in_review != 'true' && (github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true') }}
         run: |
           set -euo pipefail
 
