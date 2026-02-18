@@ -28,6 +28,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+      CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+      CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+      CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+      CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -44,6 +50,23 @@ jobs:
           cd dist
           zip -r ../cleanedin-chrome.zip .
 
+      - name: Validate Chrome Web Store configuration
+        run: |
+          set -euo pipefail
+
+          missing=()
+          for secret_name in CWS_CLIENT_ID CWS_CLIENT_SECRET CWS_REFRESH_TOKEN CWS_PUBLISHER_ID CWS_EXTENSION_ID; do
+            if [ -z "${!secret_name:-}" ]; then
+              missing+=("$secret_name")
+            fi
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Missing required GitHub Actions secrets: ${missing[*]}"
+            echo "Set these in repository Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
       - name: Exchange refresh token for access token
         id: auth
         run: |
@@ -51,9 +74,9 @@ jobs:
 
           token_http_code="$(curl -sS -o chrome-token-response.json -w '%{http_code}' \
             -X POST https://oauth2.googleapis.com/token \
-            -d "client_id=${{ secrets.CWS_CLIENT_ID }}" \
-            -d "client_secret=${{ secrets.CWS_CLIENT_SECRET }}" \
-            -d "refresh_token=${{ secrets.CWS_REFRESH_TOKEN }}" \
+            -d "client_id=${CWS_CLIENT_ID}" \
+            -d "client_secret=${CWS_CLIENT_SECRET}" \
+            -d "refresh_token=${CWS_REFRESH_TOKEN}" \
             -d "grant_type=refresh_token")"
 
           if [ "$token_http_code" != "200" ]; then
@@ -77,20 +100,31 @@ jobs:
         run: |
           set -euo pipefail
 
-          upload_url="https://chromewebstore.googleapis.com/upload/v2/publishers/${{ secrets.CWS_PUBLISHER_ID }}/items/${{ secrets.CWS_EXTENSION_ID }}:upload"
+          upload_url="https://chromewebstore.googleapis.com/upload/v2/publishers/${CWS_PUBLISHER_ID}/items/${CWS_EXTENSION_ID}:upload"
 
-          upload_response="$(curl -sS --fail-with-body \
+          upload_http_code="$(curl -sS -o chrome-upload-response.json -w '%{http_code}' \
             -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
             -X POST \
             -T cleanedin-chrome.zip \
             "$upload_url")"
 
-          echo "$upload_response" > chrome-upload-response.json
+          if [ "$upload_http_code" != "200" ]; then
+            echo "Chrome upload request failed (HTTP $upload_http_code)."
+            cat chrome-upload-response.json || true
+            if [ "$upload_http_code" = "404" ]; then
+              echo "Check CWS_PUBLISHER_ID and CWS_EXTENSION_ID. They must match the same Chrome Web Store item ownership as the OAuth refresh token account."
+            elif [ "$upload_http_code" = "401" ] || [ "$upload_http_code" = "403" ]; then
+              echo "Authorization failed. Regenerate CWS_REFRESH_TOKEN using a Google account that has rights to this publisher/item."
+            fi
+            exit 1
+          fi
+
           cat chrome-upload-response.json
 
           upload_state="$(jq -r '.uploadState // empty' chrome-upload-response.json)"
-          if [ "$upload_state" = "FAILURE" ]; then
+          if [ "$upload_state" = "FAILURE" ] || [ -z "$upload_state" ]; then
             echo "Chrome upload failed."
+            cat chrome-upload-response.json || true
             exit 1
           fi
 
@@ -99,7 +133,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          publish_url="https://chromewebstore.googleapis.com/v2/publishers/${{ secrets.CWS_PUBLISHER_ID }}/items/${{ secrets.CWS_EXTENSION_ID }}:publish"
+          publish_url="https://chromewebstore.googleapis.com/v2/publishers/${CWS_PUBLISHER_ID}/items/${CWS_EXTENSION_ID}:publish"
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.skip_review }}" == "true" ]]; then
             publish_body='{"skipReview":true}'
@@ -107,14 +141,19 @@ jobs:
             publish_body='{}'
           fi
 
-          publish_response="$(curl -sS --fail-with-body \
+          publish_http_code="$(curl -sS -o chrome-publish-response.json -w '%{http_code}' \
             -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
             -H "Content-Type: application/json" \
             -X POST \
             -d "$publish_body" \
             "$publish_url")"
 
-          echo "$publish_response" > chrome-publish-response.json
+          if [ "$publish_http_code" != "200" ]; then
+            echo "Chrome publish request failed (HTTP $publish_http_code)."
+            cat chrome-publish-response.json || true
+            exit 1
+          fi
+
           cat chrome-publish-response.json
 
           publish_state="$(jq -r '.state // empty' chrome-publish-response.json)"
@@ -127,12 +166,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          status_url="https://chromewebstore.googleapis.com/v2/publishers/${{ secrets.CWS_PUBLISHER_ID }}/items/${{ secrets.CWS_EXTENSION_ID }}:fetchStatus"
+          status_url="https://chromewebstore.googleapis.com/v2/publishers/${CWS_PUBLISHER_ID}/items/${CWS_EXTENSION_ID}:fetchStatus"
 
-          status_response="$(curl -sS --fail-with-body \
+          status_http_code="$(curl -sS -o chrome-status-response.json -w '%{http_code}' \
             -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
             -X GET \
             "$status_url")"
 
-          echo "$status_response" > chrome-status-response.json
+          if [ "$status_http_code" != "200" ]; then
+            echo "Chrome fetchStatus request failed (HTTP $status_http_code)."
+            cat chrome-status-response.json || true
+            exit 1
+          fi
+
           cat chrome-status-response.json
