@@ -5,12 +5,12 @@ const STYLE_ID = 'cleanedin-content-styles';
 const HIDDEN_CLASS = 'cleanedin-hidden';
 const BADGE_CLASS = 'cleanedin-badge';
 const BADGE_FOR_ATTR = 'data-cleanedin-badge-for';
+const POST_ID_ATTR = 'data-cleanedin-post-id';
 const FLOATING_PANEL_ID = 'cleanedin-floating-options';
 const LEFT_RAIL_CANDIDATE_SELECTORS = ['main .scaffold-layout__sidebar', 'main .scaffold-layout__aside', 'main aside'] as const;
 const IDENTITY_MODULE_ROOT_SELECTORS = ['[data-view-name="identity-module"]', '.feed-identity-module'] as const;
 
-const temporaryRevealRoots = new Set<HTMLElement>();
-const badgeByRoot = new WeakMap<HTMLElement, HTMLElement>();
+const temporaryRevealPostIds = new Set<string>();
 
 const PROFILE_SIGNAL_SELECTORS = [
   '.feed-identity-module',
@@ -588,12 +588,17 @@ function badgeText(post: PostFeatures, decision: PostDecision, settings: FilterS
   return `Post hidden (${reasonText || 'rule match'})`;
 }
 
-function removeBadge(root: HTMLElement): void {
-  const existing = badgeByRoot.get(root);
-  if (existing) {
-    existing.remove();
-    badgeByRoot.delete(root);
-  }
+function isBadgeElement(node: Element | null): node is HTMLElement {
+  return node instanceof HTMLElement && node.classList.contains(BADGE_CLASS);
+}
+
+function findAdjacentBadge(root: HTMLElement): HTMLElement | null {
+  const previous = root.previousElementSibling;
+  return isBadgeElement(previous) ? previous : null;
+}
+
+function removeAdjacentBadge(root: HTMLElement): void {
+  findAdjacentBadge(root)?.remove();
 }
 
 function findBadgesByPostId(postId: string): HTMLElement[] {
@@ -608,11 +613,29 @@ function removeBadgesByPostId(postId: string): void {
   }
 }
 
+function pruneStaleBadges(): void {
+  for (const badge of document.querySelectorAll<HTMLElement>(`.${BADGE_CLASS}[${BADGE_FOR_ATTR}]`)) {
+    const postId = badge.getAttribute(BADGE_FOR_ATTR);
+    const root = badge.nextElementSibling;
+    const isValidAdjacentRoot =
+      postId &&
+      root instanceof HTMLElement &&
+      root.isConnected &&
+      root.getAttribute(POST_ID_ATTR) === postId &&
+      root.classList.contains(HIDDEN_CLASS);
+
+    if (!isValidAdjacentRoot) {
+      badge.remove();
+    }
+  }
+}
+
 function showPost(root: HTMLElement, postId: string): void {
   root.classList.remove(HIDDEN_CLASS);
   root.removeAttribute('data-cleanedin-hidden');
+  root.setAttribute(POST_ID_ATTR, postId);
   removeBadgesByPostId(postId);
-  removeBadge(root);
+  removeAdjacentBadge(root);
 }
 
 function hidePost(root: HTMLElement): void {
@@ -625,8 +648,25 @@ function mountBadge(post: PostFeatures, decision: PostDecision, settings: Filter
     return;
   }
 
-  const existing = badgeByRoot.get(post.root);
-  if (existing?.isConnected) {
+  const adjacentBadge = findAdjacentBadge(post.root);
+  if (adjacentBadge && adjacentBadge.getAttribute(BADGE_FOR_ATTR) === post.postId) {
+    const textEl = adjacentBadge.querySelector('span');
+    if (textEl) {
+      textEl.textContent = badgeText(post, decision, settings);
+    }
+
+    adjacentBadge.dataset.cleanedinTone = getBadgeTone(post, decision);
+    return;
+  }
+
+  if (adjacentBadge) {
+    adjacentBadge.remove();
+  }
+
+  removeBadgesByPostId(post.postId);
+
+  const existing = findAdjacentBadge(post.root);
+  if (existing) {
     const textEl = existing.querySelector('span');
     if (textEl) {
       textEl.textContent = badgeText(post, decision, settings);
@@ -635,8 +675,6 @@ function mountBadge(post: PostFeatures, decision: PostDecision, settings: Filter
     existing.dataset.cleanedinTone = getBadgeTone(post, decision);
     return;
   }
-
-  removeBadgesByPostId(post.postId);
 
   const badge = document.createElement('div');
   badge.className = BADGE_CLASS;
@@ -651,17 +689,16 @@ function mountBadge(post: PostFeatures, decision: PostDecision, settings: Filter
   button.type = 'button';
   button.textContent = 'Show once';
   button.addEventListener('click', () => {
-    temporaryRevealRoots.add(post.root);
+    temporaryRevealPostIds.add(post.postId);
     showPost(post.root, post.postId);
   });
 
   badge.append(text, button);
   post.root.parentElement.insertBefore(badge, post.root);
-  badgeByRoot.set(post.root, badge);
 }
 
 export function clearTemporaryReveals(): void {
-  temporaryRevealRoots.clear();
+  temporaryRevealPostIds.clear();
 }
 
 export function clearAllHiddenBadges(): void {
@@ -701,13 +738,15 @@ export function applyPostRendering(post: PostFeatures, decision: PostDecision, s
   ensureStyleInjection();
 
   if (!post.root.isConnected) {
-    temporaryRevealRoots.delete(post.root);
+    temporaryRevealPostIds.delete(post.postId);
     removeBadgesByPostId(post.postId);
-    removeBadge(post.root);
     return;
   }
 
-  if (temporaryRevealRoots.has(post.root)) {
+  post.root.setAttribute(POST_ID_ATTR, post.postId);
+  pruneStaleBadges();
+
+  if (temporaryRevealPostIds.has(post.postId)) {
     showPost(post.root, post.postId);
     return;
   }
@@ -724,7 +763,7 @@ export function applyPostRendering(post: PostFeatures, decision: PostDecision, s
       mountBadge(post, decision, settings);
     } else {
       removeBadgesByPostId(post.postId);
-      removeBadge(post.root);
+      removeAdjacentBadge(post.root);
     }
     return;
   }

@@ -54,9 +54,13 @@ export interface FilterSettingsLocal {
 
 export interface FilterSettings extends FilterSettingsSync, FilterSettingsLocal {}
 
+export type PostIdSource = 'strong_attr' | 'feed_update_url' | 'componentkey' | 'fallback_hash';
+
 export interface PostFeatures {
   postId: string;
+  postIdSource?: PostIdSource;
   root: HTMLElement;
+  contentRoot?: HTMLElement;
   hasTimestamp: boolean;
   ageHours: number | null;
   leadText: string;

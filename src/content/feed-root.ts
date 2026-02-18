@@ -32,6 +32,7 @@ export const POST_ROOT_SELECTORS = [
 
 export const POST_ROOT_SELECTOR = POST_ROOT_SELECTORS.join(', ');
 
+const FEATURE_ROOT_SELECTOR = '[data-view-name="feed-full-update"]';
 const POST_LINK_SELECTOR = ['a[href*="/feed/update/"]', 'a[href*="/posts/"]', 'a[href*="urn:li:activity:"]'].join(', ');
 const FEED_TRACKING_SELECTOR = [
   '[data-view-tracking-scope*="FEED_UPDATE_SERVED"]',
@@ -39,7 +40,7 @@ const FEED_TRACKING_SELECTOR = [
   '[data-view-tracking-scope*="UPDATE_SERVED"]'
 ].join(', ');
 const POST_CONTAINER_HINT_SELECTOR = [
-  '[data-view-name="feed-full-update"]',
+  FEATURE_ROOT_SELECTOR,
   '[data-urn]',
   '[data-id]',
   '[data-activity-urn]',
@@ -60,6 +61,16 @@ const NON_FEED_RAIL_SELECTOR = [
   '[data-view-name="identity-module"]',
   '[data-view-name^="home-nav-left-rail-"]'
 ].join(', ');
+
+const ROOT_IDENTITY_SELECTOR = '[data-urn], [data-id], [data-activity-urn], [data-update-id], [data-occludable-job-id]';
+
+type PostTargetSource = 'feature-root' | 'selector' | 'tracking' | 'post-link' | 'fallback';
+
+export type PostTarget = {
+  renderRoot: HTMLElement;
+  featureRoot: HTMLElement;
+  source: PostTargetSource;
+};
 
 function normalizeUrlPath(urlLike: string): string {
   try {
@@ -86,11 +97,11 @@ function isExtensionUiNode(root: HTMLElement): boolean {
 }
 
 function hasStrongPostIdentity(root: HTMLElement): boolean {
-  if (root.matches('[data-view-name="feed-full-update"]')) {
+  if (root.matches(FEATURE_ROOT_SELECTOR)) {
     return true;
   }
 
-  if (root.matches('[role="listitem"]') && root.querySelector('[data-view-name="feed-full-update"]')) {
+  if (root.matches('[role="listitem"]') && root.querySelector(FEATURE_ROOT_SELECTOR)) {
     return true;
   }
 
@@ -121,7 +132,7 @@ function isGlobalContainer(root: HTMLElement): boolean {
     return true;
   }
 
-  const feedUpdateCount = root.querySelectorAll('[data-view-name="feed-full-update"]').length;
+  const feedUpdateCount = root.querySelectorAll(FEATURE_ROOT_SELECTOR).length;
   return feedUpdateCount > 1 && root.getAttribute('data-view-name') !== 'feed-full-update';
 }
 
@@ -172,6 +183,7 @@ function isLikelyPostContainer(root: HTMLElement): boolean {
     Boolean(root.querySelector('video')) ||
     Boolean(root.querySelector('iframe')) ||
     Boolean(root.querySelector('[aria-roledescription="carousel"]'));
+
   if (isArticleLike && textLength >= 80 && (hasActor || hasTime || hasUpdateLink)) {
     return true;
   }
@@ -189,6 +201,111 @@ function isLikelyPostContainer(root: HTMLElement): boolean {
   }
 
   return hasActor && (hasTime || hasActions);
+}
+
+function isLikelyFeatureRoot(root: HTMLElement): boolean {
+  if (isExtensionUiNode(root)) {
+    return false;
+  }
+
+  if (root.closest(NON_FEED_RAIL_SELECTOR)) {
+    return false;
+  }
+
+  if (root.matches(FEATURE_ROOT_SELECTOR)) {
+    return true;
+  }
+
+  return isLikelyPostContainer(root);
+}
+
+function resolveFeatureRoot(root: HTMLElement): HTMLElement {
+  if (root.matches(FEATURE_ROOT_SELECTOR)) {
+    return root;
+  }
+
+  const nestedFeature = root.querySelector<HTMLElement>(FEATURE_ROOT_SELECTOR);
+  if (nestedFeature && isLikelyFeatureRoot(nestedFeature)) {
+    return nestedFeature;
+  }
+
+  return root;
+}
+
+function resolveRenderRoot(featureRoot: HTMLElement): HTMLElement {
+  const listitem = featureRoot.closest<HTMLElement>('[role="listitem"], li');
+  if (listitem && isLikelyPostContainer(listitem)) {
+    return listitem;
+  }
+
+  const articleLike = featureRoot.closest<HTMLElement>('article, [role="article"]');
+  if (articleLike && isLikelyPostContainer(articleLike)) {
+    return articleLike;
+  }
+
+  let ancestor: HTMLElement | null = featureRoot.parentElement;
+  while (ancestor && ancestor !== document.body && ancestor !== document.documentElement) {
+    const hasAnchoringSignal =
+      hasFeedTrackingSignal(ancestor) ||
+      ancestor.matches(ROOT_IDENTITY_SELECTOR) ||
+      ancestor.getAttribute('data-view-name') === 'feed-full-update';
+
+    if (hasAnchoringSignal && isLikelyPostContainer(ancestor)) {
+      return ancestor;
+    }
+
+    ancestor = ancestor.parentElement;
+  }
+
+  return featureRoot;
+}
+
+function createPostTargetFromRoot(root: HTMLElement, source: PostTargetSource): PostTarget | null {
+  if (!isLikelyPostContainer(root)) {
+    return null;
+  }
+
+  const featureRoot = resolveFeatureRoot(root);
+  if (!isLikelyFeatureRoot(featureRoot)) {
+    return null;
+  }
+
+  if (featureRoot === root && root.matches('li, [role="listitem"]')) {
+    const hasListItemSignal =
+      hasFeedTrackingSignal(root) || Boolean(root.querySelector(POST_LINK_SELECTOR)) || Boolean(root.querySelector(ROOT_IDENTITY_SELECTOR));
+    if (!hasListItemSignal) {
+      return null;
+    }
+  }
+
+  const renderRoot = resolveRenderRoot(featureRoot);
+  if (!isLikelyPostContainer(renderRoot)) {
+    return null;
+  }
+
+  const resolvedFeatureRoot = resolveFeatureRoot(renderRoot);
+  return {
+    renderRoot,
+    featureRoot: resolvedFeatureRoot,
+    source
+  };
+}
+
+function createPostTargetFromFeatureRoot(featureRoot: HTMLElement, source: PostTargetSource): PostTarget | null {
+  if (!isLikelyFeatureRoot(featureRoot)) {
+    return null;
+  }
+
+  const renderRoot = resolveRenderRoot(featureRoot);
+  if (!isLikelyPostContainer(renderRoot)) {
+    return null;
+  }
+
+  return {
+    renderRoot,
+    featureRoot,
+    source
+  };
 }
 
 function closestLikelyPostContainer(node: Element): HTMLElement | null {
@@ -213,6 +330,20 @@ function closestLikelyPostContainer(node: Element): HTMLElement | null {
   return null;
 }
 
+function registerTarget(targets: Map<HTMLElement, PostTarget>, target: PostTarget): void {
+  const existing = targets.get(target.renderRoot);
+  if (!existing) {
+    targets.set(target.renderRoot, target);
+    return;
+  }
+
+  const existingHasDedicatedFeature = existing.featureRoot !== existing.renderRoot;
+  const incomingHasDedicatedFeature = target.featureRoot !== target.renderRoot;
+  if (!existingHasDedicatedFeature && incomingHasDedicatedFeature) {
+    targets.set(target.renderRoot, target);
+  }
+}
+
 export function isSupportedFeedPath(pathname = normalizeUrlPath(window.location.href)): boolean {
   return pathname === '/' || pathname.startsWith('/feed');
 }
@@ -228,42 +359,90 @@ export function resolveFeedRoot(doc: Document = document): HTMLElement | null {
   return null;
 }
 
-export function findPostRoots(container: ParentNode): HTMLElement[] {
-  const roots = new Set<HTMLElement>();
+export function findPostTargets(container: ParentNode): PostTarget[] {
+  const targets = new Map<HTMLElement, PostTarget>();
+
+  for (const featureRoot of maybeQueryAll<HTMLElement>(container, FEATURE_ROOT_SELECTOR)) {
+    const target = createPostTargetFromFeatureRoot(featureRoot, 'feature-root');
+    if (target) {
+      registerTarget(targets, target);
+    }
+  }
 
   for (const root of maybeQueryAll<HTMLElement>(container, POST_ROOT_SELECTOR)) {
     if (isExtensionUiNode(root)) {
       continue;
     }
 
-    if (isLikelyPostContainer(root)) {
-      roots.add(root);
+    const target = createPostTargetFromRoot(root, 'selector');
+    if (target) {
+      registerTarget(targets, target);
     }
   }
 
   for (const tracked of maybeQueryAll<HTMLElement>(container, FEED_TRACKING_SELECTOR)) {
     const candidate = closestLikelyPostContainer(tracked) ?? (isLikelyPostContainer(tracked) ? tracked : null);
-    if (candidate) {
-      roots.add(candidate);
+    if (!candidate) {
+      continue;
+    }
+
+    const target = createPostTargetFromRoot(candidate, 'tracking');
+    if (target) {
+      registerTarget(targets, target);
     }
   }
 
   for (const anchor of maybeQueryAll<HTMLAnchorElement>(container, POST_LINK_SELECTOR)) {
     const candidate = closestLikelyPostContainer(anchor);
-    if (candidate) {
-      roots.add(candidate);
+    if (!candidate) {
+      continue;
+    }
+
+    const target = createPostTargetFromRoot(candidate, 'post-link');
+    if (target) {
+      registerTarget(targets, target);
     }
   }
 
-  if (roots.size === 0) {
+  if (targets.size === 0) {
     for (const fallback of maybeQueryAll<HTMLElement>(container, 'article, [role="article"], [role="listitem"]')) {
-      if (isLikelyPostContainer(fallback)) {
-        roots.add(fallback);
+      const target = createPostTargetFromRoot(fallback, 'fallback');
+      if (target) {
+        registerTarget(targets, target);
       }
     }
   }
 
-  return [...roots];
+  return [...targets.values()];
+}
+
+export function findPostRoots(container: ParentNode): HTMLElement[] {
+  return findPostTargets(container).map((target) => target.renderRoot);
+}
+
+export function findNearestPostTarget(node: Element): PostTarget | null {
+  if (!(node instanceof HTMLElement)) {
+    return null;
+  }
+
+  if (node.closest('.cleanedin-badge, [data-cleanedin-ui="1"]')) {
+    return null;
+  }
+
+  const nearestFeature = node.closest<HTMLElement>(FEATURE_ROOT_SELECTOR);
+  if (nearestFeature) {
+    const target = createPostTargetFromFeatureRoot(nearestFeature, 'feature-root');
+    if (target) {
+      return target;
+    }
+  }
+
+  const nearestRoot = closestLikelyPostContainer(node);
+  if (!nearestRoot) {
+    return null;
+  }
+
+  return createPostTargetFromRoot(nearestRoot, 'selector');
 }
 
 export function isPostRootNode(node: Element): node is HTMLElement {
@@ -271,11 +450,11 @@ export function isPostRootNode(node: Element): node is HTMLElement {
     return false;
   }
 
-  return closestLikelyPostContainer(node) === node;
+  return findNearestPostTarget(node)?.renderRoot === node;
 }
 
 export function findNearestPostRoot(node: Element): HTMLElement | null {
-  return closestLikelyPostContainer(node);
+  return findNearestPostTarget(node)?.renderRoot ?? null;
 }
 
 export function getPostRootSelectorCounts(doc: ParentNode = document): Record<string, number> {

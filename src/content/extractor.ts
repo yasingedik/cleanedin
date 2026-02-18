@@ -1,5 +1,5 @@
 import type { ConnectionLevel, PostFeatures, ProfileType } from '../shared/types';
-import { derivePostId } from './post-id';
+import { derivePostIdentity } from './post-id';
 
 const RELATIVE_TOKEN_PATTERN =
   /(\d+)\s*(years?|yrs?|yr|y|months?|mos?|mo|weeks?|wks?|wk|w|days?|d|hours?|hrs?|hr|h|minutes?|mins?|min|m(?!o\b)|seconds?|secs?|sec|s)\b/gi;
@@ -20,6 +20,13 @@ const ACTOR_SIGNAL_SELECTOR = [
   '[data-view-name*="feed-actor"]',
   '[data-view-name*="actor"]',
   '[data-test-id*="actor"]'
+].join(', ');
+const COMMENT_SUBTREE_SELECTOR = [
+  '[data-view-name^="comment-"]',
+  '[data-view-name*="comment-"]',
+  '[data-view-name="comment-container"]',
+  '[data-testid*="comment"]',
+  '[componentkey*="replaceableComment_"]'
 ].join(', ');
 const CONNECTION_CONTROL_SELECTOR = 'button, [role="button"], a[role="button"]';
 const PROFILE_LINK_SELECTOR = ['a[href*="/in/"]', 'a[href*="/company/"]', 'a[href*="/school/"]', 'a[href*="/groups/"]'].join(
@@ -70,6 +77,10 @@ const HOURS_BY_UNIT: Record<string, number> = {
 
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
+}
+
+function isCommentSubtree(node: Element): boolean {
+  return Boolean(node.closest(COMMENT_SUBTREE_SELECTOR));
 }
 
 function extractLeadText(root: HTMLElement): string {
@@ -223,6 +234,10 @@ function extractActorNames(root: HTMLElement, leadText: string): string[] {
 
   const anchors = root.querySelectorAll<HTMLAnchorElement>(ACTOR_LINK_SELECTOR);
   for (const anchor of anchors) {
+    if (isCommentSubtree(anchor)) {
+      continue;
+    }
+
     const normalized = normalizeActorName(anchor.textContent ?? '');
     registerName(normalized);
 
@@ -244,6 +259,10 @@ function extractActorNames(root: HTMLElement, leadText: string): string[] {
 
   const actorSignals = root.querySelectorAll<HTMLElement>(ACTOR_SIGNAL_SELECTOR);
   for (const signal of actorSignals) {
+    if (isCommentSubtree(signal)) {
+      continue;
+    }
+
     const source = normalizeText(signal.textContent ?? '');
     if (!source) {
       continue;
@@ -285,6 +304,10 @@ function collectConnectionSignalTexts(root: HTMLElement, leadText: string): stri
 
   const actorNodes = root.querySelectorAll<HTMLElement>(ACTOR_SIGNAL_SELECTOR);
   for (const node of actorNodes) {
+    if (isCommentSubtree(node)) {
+      continue;
+    }
+
     register(node.textContent, 280);
     if (signals.length >= 8) {
       break;
@@ -293,6 +316,10 @@ function collectConnectionSignalTexts(root: HTMLElement, leadText: string): stri
 
   const profileLinks = root.querySelectorAll<HTMLAnchorElement>(PROFILE_LINK_SELECTOR);
   for (const link of profileLinks) {
+    if (isCommentSubtree(link)) {
+      continue;
+    }
+
     register(link.textContent, 240);
     if (signals.length >= 12) {
       break;
@@ -319,19 +346,26 @@ function hasFollowingControlSignal(root: HTMLElement): boolean {
   const controls = root.querySelectorAll<HTMLElement>(CONNECTION_CONTROL_SELECTOR);
 
   for (const control of controls) {
+    if (isCommentSubtree(control)) {
+      continue;
+    }
+
     const controlText = extractControlText(control);
     if (!controlText) {
       continue;
     }
 
-    const hasFollowingKeyword = /\bfollowing\b(?!\s+up\b)/.test(controlText) || /\bunfollow\b/.test(controlText);
-    if (!hasFollowingKeyword) {
+    const hasFollowStateKeyword = /\bfollowing\b(?!\s+up\b)/.test(controlText) || /\bunfollow\b/.test(controlText);
+    if (!hasFollowStateKeyword) {
       continue;
     }
 
     const controlName = (control.getAttribute('data-control-name') ?? '').toLowerCase();
     const nearbyControlName = (control.closest<HTMLElement>('[data-control-name]')?.getAttribute('data-control-name') ?? '').toLowerCase();
-    const hasFollowControlHint = controlName.includes('follow') || nearbyControlName.includes('follow') || /\bfollow\b/.test(controlText);
+    const hasFollowControlHint =
+      controlName.includes('follow') ||
+      nearbyControlName.includes('follow') ||
+      /\b(?:follow|following|unfollow)\b/.test(controlText);
 
     if (hasFollowControlHint) {
       return true;
@@ -424,7 +458,10 @@ function extractProfileType(
   }
 
   const head = leadText.toLowerCase().slice(0, 200);
-  const actorSignalText = normalizeText(root.querySelector<HTMLElement>(ACTOR_SIGNAL_SELECTOR)?.textContent ?? '').toLowerCase();
+  const firstActorSignal = [...root.querySelectorAll<HTMLElement>(ACTOR_SIGNAL_SELECTOR)].find(
+    (signal) => !isCommentSubtree(signal)
+  );
+  const actorSignalText = normalizeText(firstActorSignal?.textContent ?? '').toLowerCase();
   if (head.includes('group')) {
     return 'group';
   }
@@ -448,24 +485,28 @@ function extractProfileType(
   return 'other';
 }
 
-export function extractPostFeatures(root: HTMLElement): PostFeatures {
-  const leadText = extractLeadText(root);
-  const timestampText = extractTimestampText(root, leadText);
+export function extractPostFeatures(root: HTMLElement, contentRoot: HTMLElement = root): PostFeatures {
+  const sourceRoot = contentRoot;
+  const leadText = extractLeadText(sourceRoot);
+  const timestampText = extractTimestampText(sourceRoot, leadText);
   const ageHours = parseAgeHours(timestampText);
-  const actorNames = extractActorNames(root, leadText);
-  const connectionLevel = extractConnectionLevel(root, leadText);
+  const actorNames = extractActorNames(sourceRoot, leadText);
+  const connectionLevel = extractConnectionLevel(sourceRoot, leadText);
+  const postIdentity = derivePostIdentity(root, sourceRoot);
 
   return {
-    postId: derivePostId(root),
+    postId: postIdentity.postId,
+    postIdSource: postIdentity.source,
     root,
+    contentRoot: sourceRoot,
     hasTimestamp: Boolean(timestampText),
     ageHours,
     leadText: leadText.toLowerCase(),
     actorNames,
     connectionLevel,
-    profileType: extractProfileType(root, leadText, actorNames, connectionLevel),
+    profileType: extractProfileType(sourceRoot, leadText, actorNames, connectionLevel),
     labels: new Set(),
-    textContent: normalizeText(root.textContent ?? ''),
-    links: extractLinks(root)
+    textContent: normalizeText(sourceRoot.textContent ?? ''),
+    links: extractLinks(sourceRoot)
   };
 }

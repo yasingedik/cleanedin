@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { findPostRoots, isPostRootNode, resolveFeedRoot } from '../../../src/content/feed-root';
+import { findPostRoots, findPostTargets, isPostRootNode, resolveFeedRoot } from '../../../src/content/feed-root';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -163,7 +163,7 @@ describe('feed root detection', () => {
         <div data-testid="mainFeed">
           <ul>
             <li id="li-post-compact">
-              <a href="/in/jane-doe">Jane Doe</a>
+              <a href="/in/sample-person">Sample Person</a>
               <a href="/feed/update/urn:li:activity:301">View update</a>
               <span>1h</span>
             </li>
@@ -192,7 +192,7 @@ describe('feed root detection', () => {
         <div data-testid="mainFeed">
           <ul>
             <li id="feed-li">
-              <a href="/in/jane-doe">Jane Doe</a>
+              <a href="/in/sample-person">Sample Person</a>
               <a href="/feed/update/urn:li:activity:302">Feed update</a>
               <button>Like</button>
               <button>Comment</button>
@@ -209,13 +209,13 @@ describe('feed root detection', () => {
     expect(roots.some((root) => root.id === 'feed-li')).toBe(true);
   });
 
-  it('prefers feed-full-update container over nested feed-* nodes in listitem layouts', () => {
+  it('prefers outer listitem container over nested feed-* nodes in listitem layouts', () => {
     document.body.innerHTML = `
       <main>
         <div data-testid="mainFeed">
           <div role="listitem" id="li-shell">
             <div data-view-name="feed-full-update" id="post-root">
-              <a href="/in/jane-doe">Jane Doe <span>• Following</span></a>
+              <a href="/in/sample-person">Sample Person <span>• Following</span></a>
               <p data-view-name="feed-commentary" id="nested-commentary">
                 Text with <a href="/feed/update/urn:li:activity:777">permalink</a>
               </p>
@@ -230,15 +230,70 @@ describe('feed root detection', () => {
     const feedRoot = resolveFeedRoot(document);
     const roots = findPostRoots(feedRoot as HTMLElement);
 
-    expect(roots.some((root) => root.id === 'post-root')).toBe(true);
+    expect(roots.some((root) => root.id === 'li-shell')).toBe(true);
+    expect(roots.some((root) => root.id === 'post-root')).toBe(false);
     expect(roots.some((root) => root.id === 'nested-commentary')).toBe(false);
+  });
+
+  it('maps outer listitem as render root and feed-full-update as feature root', () => {
+    document.body.innerHTML = `
+      <main>
+        <div data-testid="mainFeed">
+          <div role="listitem" id="outer-shell">
+            <div data-view-name="feed-full-update" id="inner-feature">
+              <a href="/in/sample-person">Sample Person</a>
+              <p>Post content body</p>
+              <button aria-label="Like">Like</button>
+              <button aria-label="Comment">Comment</button>
+            </div>
+          </div>
+        </div>
+      </main>
+    `;
+
+    const feedRoot = resolveFeedRoot(document);
+    const targets = findPostTargets(feedRoot as HTMLElement);
+    const match = targets.find((target) => target.featureRoot.id === 'inner-feature');
+
+    expect(match?.renderRoot.id).toBe('outer-shell');
+    expect(match?.featureRoot.id).toBe('inner-feature');
+  });
+
+  it('does not classify nested recommendation listitems as independent post roots', () => {
+    document.body.innerHTML = `
+      <main>
+        <div data-testid="mainFeed">
+          <div role="listitem" id="outer-post">
+            <div data-view-name="feed-full-update">
+              <a href="/in/sample-person">Sample Person</a>
+              <p>Primary post content.</p>
+              <button aria-label="Like">Like</button>
+              <button aria-label="Comment">Comment</button>
+            </div>
+
+            <ul>
+              <li role="listitem" id="nested-follow-card">
+                <a data-view-name="feed-actor" href="/in/recommended-person">Recommended Person</a>
+                <button>Follow</button>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </main>
+    `;
+
+    const feedRoot = resolveFeedRoot(document);
+    const roots = findPostRoots(feedRoot as HTMLElement);
+
+    expect(roots.some((root) => root.id === 'outer-post')).toBe(true);
+    expect(roots.some((root) => root.id === 'nested-follow-card')).toBe(false);
   });
 
   it('treats only the actual post container as a post root node', () => {
     document.body.innerHTML = `
       <main>
         <div data-testid="mainFeed">
-          <div role="listitem">
+          <div role="listitem" id="li-shell">
             <div data-view-name="feed-full-update" id="post-root">
               <p data-view-name="feed-commentary" id="nested-commentary">
                 Inner content
@@ -249,12 +304,15 @@ describe('feed root detection', () => {
       </main>
     `;
 
+    const listItemRoot = document.getElementById('li-shell');
     const postRoot = document.getElementById('post-root');
     const nestedCommentary = document.getElementById('nested-commentary');
 
+    expect(listItemRoot).not.toBeNull();
     expect(postRoot).not.toBeNull();
     expect(nestedCommentary).not.toBeNull();
-    expect(isPostRootNode(postRoot as HTMLElement)).toBe(true);
+    expect(isPostRootNode(listItemRoot as HTMLElement)).toBe(true);
+    expect(isPostRootNode(postRoot as HTMLElement)).toBe(false);
     expect(isPostRootNode(nestedCommentary as HTMLElement)).toBe(false);
   });
 });

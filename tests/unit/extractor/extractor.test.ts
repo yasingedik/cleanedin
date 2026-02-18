@@ -35,7 +35,7 @@ describe('extractPostFeatures connection levels', () => {
   it('detects following from actor metadata', () => {
     const root = createPostRoot(`
       <article data-urn="urn:li:activity:1001">
-        <div data-view-name="feed-actor">Jane Doe • Following • 2d</div>
+        <div data-view-name="feed-actor">Sample Person • Following • 2d</div>
         <p>Regular feed update text.</p>
       </article>
     `);
@@ -47,7 +47,7 @@ describe('extractPostFeatures connection levels', () => {
   it('detects following when token has no bullet separators', () => {
     const root = createPostRoot(`
       <article data-urn="urn:li:activity:1003">
-        <div data-view-name="feed-actor">Jane Doe Following 2d</div>
+        <div data-view-name="feed-actor">Sample Person Following 2d</div>
         <p>Regular feed update text.</p>
       </article>
     `);
@@ -59,7 +59,7 @@ describe('extractPostFeatures connection levels', () => {
   it('does not treat plain body text as following connection level', () => {
     const root = createPostRoot(`
       <article data-urn="urn:li:activity:1002">
-        <div data-view-name="feed-actor">Jane Doe • 2d</div>
+        <div data-view-name="feed-actor">Sample Person • 2d</div>
         <p>I am following up next week with a hiring update.</p>
       </article>
     `);
@@ -71,8 +71,21 @@ describe('extractPostFeatures connection levels', () => {
   it('detects following from follow control aria-label when actor line omits following token', () => {
     const root = createPostRoot(`
       <article data-urn="urn:li:activity:1004">
-        <div data-view-name="feed-actor">Jane Doe • 2d</div>
-        <button data-control-name="follow">Following Jane Doe</button>
+        <div data-view-name="feed-actor">Sample Person • 2d</div>
+        <button data-control-name="follow">Following Sample Person</button>
+        <p>Regular feed update text.</p>
+      </article>
+    `);
+
+    const features = extractPostFeatures(root);
+    expect(features.connectionLevel).toBe('following');
+  });
+
+  it('detects following from unfollow control when follow control metadata is missing', () => {
+    const root = createPostRoot(`
+      <article data-urn="urn:li:activity:1004b">
+        <div data-view-name="feed-actor">Sample Person • 2d</div>
+        <button aria-label="Unfollow Sample Person">Following</button>
         <p>Regular feed update text.</p>
       </article>
     `);
@@ -84,7 +97,7 @@ describe('extractPostFeatures connection levels', () => {
   it('does not treat plain follow button as already following', () => {
     const root = createPostRoot(`
       <article data-urn="urn:li:activity:1005">
-        <div data-view-name="feed-actor">Jane Doe • 2d</div>
+        <div data-view-name="feed-actor">Sample Person • 2d</div>
         <button data-control-name="follow">Follow</button>
         <p>Regular feed update text.</p>
       </article>
@@ -97,7 +110,7 @@ describe('extractPostFeatures connection levels', () => {
   it('detects following when actor text collapses with adjacent words', () => {
     const root = createPostRoot(`
       <article data-urn="urn:li:activity:1006">
-        <div data-view-name="feed-actor">Ozgur Koch • FollowingBank of America</div>
+        <div data-view-name="feed-actor">Sample Person A • FollowingExample Bank</div>
         <p>Starting a new position</p>
       </article>
     `);
@@ -109,9 +122,9 @@ describe('extractPostFeatures connection levels', () => {
   it('detects following from profile link text without actor data-view-name attributes', () => {
     const root = createPostRoot(`
       <article data-urn="urn:li:activity:1007">
-        <a href="https://www.linkedin.com/in/ozgur-koch-a673243/">
-          <p>Ozgur Koch<span> • Following</span></p>
-          <p>Bank of America, Senior Vice President</p>
+        <a href="https://www.linkedin.com/in/sample-person-a/">
+          <p>Sample Person A<span> • Following</span></p>
+          <p>Example Bank, Senior Vice President</p>
           <p>2w •</p>
         </a>
         <p>Starting a new position</p>
@@ -121,13 +134,43 @@ describe('extractPostFeatures connection levels', () => {
     const features = extractPostFeatures(root);
     expect(features.connectionLevel).toBe('following');
   });
+
+  it('prefers top-level author following signal over commenter connection labels', () => {
+    const root = createPostRoot(`
+      <article data-urn="urn:li:ugcPost:7422990358483214336">
+        <div data-view-name="feed-full-update">
+          <a href="https://www.linkedin.com/in/sample-author/">
+            <p>Sample Author <span> • Following</span></p>
+            <p>2w •</p>
+          </a>
+          <div data-testid="commentList">
+            <div data-view-name="comment-container">
+              <a href="https://www.linkedin.com/in/sample-commenter/">
+                <p>Sample Commenter <span> • 3rd+</span></p>
+                <p>2w</p>
+              </a>
+              <p>I am following up next week with a hiring update.</p>
+            </div>
+          </div>
+        </div>
+      </article>
+    `);
+
+    const contentRoot = root.querySelector<HTMLElement>('[data-view-name="feed-full-update"]');
+    if (!contentRoot) {
+      throw new Error('Missing content root');
+    }
+
+    const features = extractPostFeatures(root, contentRoot);
+    expect(features.connectionLevel).toBe('following');
+  });
 });
 
 describe('extractPostFeatures profile type fallback', () => {
   it('defaults to individual when actor names are detected', () => {
     const root = createPostRoot(`
       <article data-urn="urn:li:activity:2001">
-        <div data-view-name="feed-actor">Jane Doe • 2d</div>
+        <div data-view-name="feed-actor">Sample Person • 2d</div>
         <p>Thoughts on product strategy.</p>
       </article>
     `);

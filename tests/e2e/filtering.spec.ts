@@ -115,6 +115,19 @@ test('show/hide action switches control filtering and temporary reveal works end
 
     await expect(feed.locator('#post-video')).not.toHaveClass(/cleanedin-hidden/);
 
+    await feed.evaluate(() => {
+      const current = document.getElementById('post-video');
+      if (!current || !current.parentElement) {
+        return;
+      }
+
+      const replacement = current.cloneNode(true) as HTMLElement;
+      replacement.id = 'post-video';
+      current.parentElement.replaceChild(replacement, current);
+    });
+
+    await expect(feed.locator('#post-video')).not.toHaveClass(/cleanedin-hidden/);
+
     await feed.reload();
 
     await expect(feed.locator('#post-video')).toHaveClass(/cleanedin-hidden/);
