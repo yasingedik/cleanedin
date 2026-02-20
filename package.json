@@ -34,10 +34,10 @@
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium",
     "version": "node scripts/sync-manifest-version.mjs && git add manifest.json",
-    "release": "npm version",
-    "release:patch": "npm version patch",
-    "release:minor": "npm version minor",
-    "release:major": "npm version major"
+    "release": "node scripts/release.mjs",
+    "release:patch": "node scripts/release.mjs patch",
+    "release:minor": "node scripts/release.mjs minor",
+    "release:major": "node scripts/release.mjs major"
   },
   "devDependencies": {
     "@playwright/test": "^1.51.0",
