@@ -37,7 +37,7 @@ jobs:
       EDGE_API_ROOT: https://api.addons.microsoftedge.microsoft.com/v1
       EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
       EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
-      EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID || vars.EDGE_PRODUCT_ID }}
+      EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
     steps:
       - name: Resolve store-packages run ID
         id: source
@@ -84,7 +84,7 @@ jobs:
 
           cp "${matches[0]}" cleanedin-edge.zip
 
-      - name: Validate Edge Add-ons configuration
+      - name: Resolve and validate Edge Add-ons configuration
         run: |
           set -euo pipefail
 
@@ -101,31 +101,31 @@ jobs:
             exit 1
           fi
 
-          if [[ ! "$EDGE_PRODUCT_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
-            echo "EDGE_PRODUCT_ID does not look like a Partner Center product GUID."
-            echo "Use the Partner Center product ID (GUID), not the public store extension ID."
+          trim_value() {
+            local value="$1"
+            value="$(printf '%s' "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            value="${value#\"}"
+            value="${value%\"}"
+            value="${value,,}"
+            printf '%s' "$value"
+          }
+
+          resolved_product_id="$(trim_value "${EDGE_PRODUCT_ID:-}")"
+
+          if [ -z "$resolved_product_id" ]; then
+            echo "Missing required Edge configuration value: EDGE_PRODUCT_ID."
             exit 1
           fi
 
-      - name: Validate Edge product access
-        run: |
-          set -euo pipefail
+          product_hash="$(printf '%s' "$resolved_product_id" | shasum -a 256 | awk '{print $1}')"
+          echo "EDGE_PRODUCT_ID length: ${#resolved_product_id}"
+          echo "EDGE_PRODUCT_ID sha256 (first 12): ${product_hash:0:12}"
 
-          product_url="${EDGE_API_ROOT}/products/${EDGE_PRODUCT_ID}"
-          http_code="$(curl -sS -o edge-product-response.json -w '%{http_code}' \
-            -H "Authorization: ApiKey ${EDGE_API_KEY}" \
-            -H "X-ClientID: ${EDGE_CLIENT_ID}" \
-            -X GET \
-            "$product_url")"
+          echo "EDGE_PRODUCT_ID=$resolved_product_id" >> "$GITHUB_ENV"
 
-          if [ "$http_code" != "200" ]; then
-            echo "Unable to access Edge product metadata (HTTP $http_code)."
-            cat edge-product-response.json || true
-            if [ "$http_code" = "404" ]; then
-              echo "Check EDGE_PRODUCT_ID. It must be the Partner Center product ID for this extension and belong to the same Partner Center account as EDGE_API_KEY/EDGE_CLIENT_ID."
-            elif [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
-              echo "Check EDGE_API_KEY and EDGE_CLIENT_ID. They must be generated for this same Partner Center account."
-            fi
+          if [[ ! "$resolved_product_id" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+            echo "EDGE_PRODUCT_ID does not look like a Partner Center product GUID."
+            echo "Use the Partner Center product ID (GUID), not the public store extension ID."
             exit 1
           fi
 

@@ -17,6 +17,7 @@
    - `cleanedin-chrome-vX.Y.Z.zip`
    - `cleanedin-edge-vX.Y.Z.zip`
 5. Verify `publish-chrome` and `publish-edge` workflows succeed. They now download the zip from `store-packages` artifacts instead of rebuilding.
+   - `publish-edge` uses Microsoft Edge Add-ons API `v1` endpoints.
 6. If you run publish workflows manually, pass `store_run_id` from the successful `store-packages` run.
 7. Verify store listing legal URLs:
    - Privacy policy: `https://cleanedin.yasingedik.com/privacy-policy.html`
