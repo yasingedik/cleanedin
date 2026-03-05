@@ -178,6 +178,69 @@ describe('feed root detection', () => {
     expect(roots.some((root) => root.id === 'li-post-compact')).toBe(true);
   });
 
+  it('accepts modern listitem feed cards without legacy tracking and update-link markers', () => {
+    document.body.innerHTML = `
+      <main>
+        <div data-testid="mainFeed">
+          <div role="listitem" id="modern-card">
+            <h2><span>Feed post</span></h2>
+            <div>
+              <a href="/in/sample-person">Sample Person</a>
+              <span> • 3rd+</span>
+            </div>
+            <p data-testid="expandable-text-box">
+              This modern card omits feed/update links and tracking attributes but is still a real post.
+            </p>
+            <button aria-label="Open control menu for post by Sample Person">More</button>
+            <button>Like</button>
+            <button>Comment</button>
+            <button>Repost</button>
+            <button>Send</button>
+          </div>
+        </div>
+      </main>
+    `;
+
+    const feedRoot = resolveFeedRoot(document);
+    const roots = findPostRoots(feedRoot as HTMLElement);
+
+    expect(roots.some((root) => root.id === 'modern-card')).toBe(true);
+  });
+
+  it('accepts suggested and recommended modern cards rendered as compact feed listitems', () => {
+    document.body.innerHTML = `
+      <main>
+        <div data-testid="mainFeed">
+          <div role="listitem" id="modern-suggested-card">
+            <h2><span>Feed post</span></h2>
+            <p>Suggested</p>
+            <a href="/in/suggested-author">Suggested Author</a>
+            <p data-testid="expandable-text-box">Suggested content body text.</p>
+            <button aria-label="Open control menu for post by Suggested Author">More</button>
+            <button>Like</button>
+            <button>Comment</button>
+            <button>Repost</button>
+            <button>Send</button>
+          </div>
+          <div role="listitem" id="modern-recommended-card">
+            <h2><span>Feed post</span></h2>
+            <p>Recommended for you</p>
+            <a href="/company/recommended-company/">Recommended Company</a>
+            <div data-testid="expandable-text-box">Because you follow AI and platform engineering topics.</div>
+            <button>Follow</button>
+            <button>Follow</button>
+          </div>
+        </div>
+      </main>
+    `;
+
+    const feedRoot = resolveFeedRoot(document);
+    const roots = findPostRoots(feedRoot as HTMLElement);
+
+    expect(roots.some((root) => root.id === 'modern-suggested-card')).toBe(true);
+    expect(roots.some((root) => root.id === 'modern-recommended-card')).toBe(true);
+  });
+
   it('ignores update links inside left rail modules', () => {
     document.body.innerHTML = `
       <main>
@@ -274,6 +337,8 @@ describe('feed root detection', () => {
             <ul>
               <li role="listitem" id="nested-follow-card">
                 <a data-view-name="feed-actor" href="/in/recommended-person">Recommended Person</a>
+                <p data-testid="expandable-text-box">People you may know from your network.</p>
+                <button>Follow</button>
                 <button>Follow</button>
               </li>
             </ul>

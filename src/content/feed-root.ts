@@ -63,6 +63,24 @@ const NON_FEED_RAIL_SELECTOR = [
 ].join(', ');
 
 const ROOT_IDENTITY_SELECTOR = '[data-urn], [data-id], [data-activity-urn], [data-update-id], [data-occludable-job-id]';
+const ACTOR_PROFILE_LINK_SELECTOR = ['a[href*="/in/"]', 'a[href*="/company/"]', 'a[href*="/school/"]', 'a[href*="/groups/"]'].join(
+  ', '
+);
+const LISTITEM_CONTROL_SELECTOR = 'button, [role="button"], a[role="button"]';
+const FEED_CONTENT_MARKER_SELECTOR = [
+  '[data-testid="expandable-text-box"]',
+  '[data-view-name="feed-commentary"]',
+  '[data-view-name*="feed-commentary"]',
+  '[data-testid*="carousel"]',
+  'img',
+  'video',
+  'iframe'
+].join(', ');
+const POST_ACTION_TOKEN_PATTERN = /\b(?:like|comment|repost|send|share)\b/;
+const FOLLOW_ACTION_TOKEN_PATTERN = /\bfollow\b/;
+const FEED_POST_LEAD_PREFIX = 'feed post';
+const FEED_POST_LEAD_COMPACT_PREFIX = 'feedpost';
+const FEED_POST_LEAD_LENGTH = 240;
 
 type PostTargetSource = 'feature-root' | 'selector' | 'tracking' | 'post-link' | 'fallback';
 
@@ -125,6 +143,76 @@ function hasFeedTrackingSignal(root: HTMLElement): boolean {
     trackingScope.includes('SPONSORED_UPDATE_SERVED') ||
     trackingScope.includes('UPDATE_SERVED')
   );
+}
+
+function normalizeInlineText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function controlSignalText(node: Element): string {
+  return normalizeInlineText(
+    `${node.getAttribute('aria-label') ?? ''} ${node.getAttribute('title') ?? ''} ${(node as HTMLElement).textContent ?? ''}`
+  );
+}
+
+function hasFeedPostLeadSignature(root: HTMLElement): boolean {
+  const lead = normalizeInlineText((root.textContent ?? '').slice(0, FEED_POST_LEAD_LENGTH));
+  if (!lead) {
+    return false;
+  }
+
+  const compactLead = lead.replace(/\s+/g, '');
+  return lead.startsWith(FEED_POST_LEAD_PREFIX) || compactLead.startsWith(FEED_POST_LEAD_COMPACT_PREFIX);
+}
+
+function hasModernListitemFallbackSignal(root: HTMLElement): boolean {
+  if (!root.matches('li, [role="listitem"]')) {
+    return false;
+  }
+
+  if (!hasFeedPostLeadSignature(root)) {
+    return false;
+  }
+
+  const hasActorProfile = Boolean(root.querySelector(ACTOR_PROFILE_LINK_SELECTOR));
+  if (!hasActorProfile) {
+    return false;
+  }
+
+  const controls = [...root.querySelectorAll<HTMLElement>(LISTITEM_CONTROL_SELECTOR)].slice(0, 48);
+  let actionKeywordHits = 0;
+  let hasFollowAction = false;
+  let hasPostMenuHint = false;
+
+  for (const control of controls) {
+    const signal = controlSignalText(control);
+    if (!signal) {
+      continue;
+    }
+
+    if (
+      signal.includes('control menu for post') ||
+      signal.includes('hide post') ||
+      signal.includes('more options for post')
+    ) {
+      hasPostMenuHint = true;
+    }
+
+    if (POST_ACTION_TOKEN_PATTERN.test(signal)) {
+      actionKeywordHits += 1;
+    }
+
+    if (FOLLOW_ACTION_TOKEN_PATTERN.test(signal)) {
+      hasFollowAction = true;
+    }
+  }
+
+  const buttonCount = root.querySelectorAll('button').length;
+  const hasFeedActionCluster = actionKeywordHits >= 2 || buttonCount >= 4;
+  const hasContentMarker =
+    Boolean(root.querySelector(FEED_CONTENT_MARKER_SELECTOR)) || normalizeInlineText(root.textContent ?? '').length >= 180;
+
+  return hasContentMarker && (hasFeedActionCluster || hasFollowAction || hasPostMenuHint);
 }
 
 function isGlobalContainer(root: HTMLElement): boolean {
@@ -272,7 +360,10 @@ function createPostTargetFromRoot(root: HTMLElement, source: PostTargetSource): 
 
   if (featureRoot === root && root.matches('li, [role="listitem"]')) {
     const hasListItemSignal =
-      hasFeedTrackingSignal(root) || Boolean(root.querySelector(POST_LINK_SELECTOR)) || Boolean(root.querySelector(ROOT_IDENTITY_SELECTOR));
+      hasFeedTrackingSignal(root) ||
+      Boolean(root.querySelector(POST_LINK_SELECTOR)) ||
+      Boolean(root.querySelector(ROOT_IDENTITY_SELECTOR)) ||
+      hasModernListitemFallbackSignal(root);
     if (!hasListItemSignal) {
       return null;
     }

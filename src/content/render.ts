@@ -7,10 +7,27 @@ const BADGE_CLASS = 'cleanedin-badge';
 const BADGE_FOR_ATTR = 'data-cleanedin-badge-for';
 const POST_ID_ATTR = 'data-cleanedin-post-id';
 const FLOATING_PANEL_ID = 'cleanedin-floating-options';
+const FLOATING_PANEL_LAYOUT_STORAGE_KEY = 'cleanedin:floating-panel-layout:v1';
+const FLOATING_PANEL_MARGIN = 12;
+const FLOATING_PANEL_DEFAULT_TOP = 84;
+const FLOATING_PANEL_DEFAULT_WIDTH = 330;
+const FLOATING_PANEL_DEFAULT_HEIGHT = 620;
+const FLOATING_PANEL_MIN_WIDTH = 260;
+const FLOATING_PANEL_MIN_HEIGHT = 320;
+const RAIL_INSERTION_CARD_INDEX = 2;
 const LEFT_RAIL_CANDIDATE_SELECTORS = ['main .scaffold-layout__sidebar', 'main .scaffold-layout__aside', 'main aside'] as const;
 const IDENTITY_MODULE_ROOT_SELECTORS = ['[data-view-name="identity-module"]', '.feed-identity-module'] as const;
 
 const temporaryRevealPostIds = new Set<string>();
+let lastKnownRailMountTarget: HTMLElement | null = null;
+
+type FloatingPanelLayout = {
+  undocked: boolean;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
 
 const PROFILE_SIGNAL_SELECTORS = [
   '.feed-identity-module',
@@ -320,16 +337,366 @@ function normalizeRailMountTarget(target: HTMLElement): HTMLElement {
   return node;
 }
 
-function resolveRailInsertionAnchor(container: HTMLElement): HTMLElement | null {
-  const railCards = directElementChildren(container).filter((child) => hasIdentitySignal(child) || hasRailModuleSignal(child));
-  if (railCards.length > 0) {
-    return railCards[railCards.length - 1] ?? null;
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getViewportWidth(): number {
+  return Math.max(window.innerWidth, document.documentElement?.clientWidth ?? 0, 0);
+}
+
+function getViewportHeight(): number {
+  return Math.max(window.innerHeight, document.documentElement?.clientHeight ?? 0, 0);
+}
+
+function getDefaultFloatingPanelLayout(): FloatingPanelLayout {
+  const viewportWidth = getViewportWidth();
+  const viewportHeight = getViewportHeight();
+  const maxWidth = Math.max(FLOATING_PANEL_MIN_WIDTH, viewportWidth - FLOATING_PANEL_MARGIN * 2);
+  const maxHeight = Math.max(FLOATING_PANEL_MIN_HEIGHT, viewportHeight - FLOATING_PANEL_MARGIN * 2);
+  const width = clamp(FLOATING_PANEL_DEFAULT_WIDTH, FLOATING_PANEL_MIN_WIDTH, maxWidth);
+  const height = clamp(FLOATING_PANEL_DEFAULT_HEIGHT, FLOATING_PANEL_MIN_HEIGHT, maxHeight);
+  const top = clamp(
+    FLOATING_PANEL_DEFAULT_TOP,
+    FLOATING_PANEL_MARGIN,
+    Math.max(FLOATING_PANEL_MARGIN, viewportHeight - FLOATING_PANEL_MARGIN - height)
+  );
+  const left = clamp(
+    FLOATING_PANEL_MARGIN,
+    FLOATING_PANEL_MARGIN,
+    Math.max(FLOATING_PANEL_MARGIN, viewportWidth - FLOATING_PANEL_MARGIN - width)
+  );
+
+  return {
+    undocked: false,
+    left,
+    top,
+    width,
+    height
+  };
+}
+
+function normalizeFloatingPanelLayout(input: Partial<FloatingPanelLayout>): FloatingPanelLayout {
+  const defaults = getDefaultFloatingPanelLayout();
+  const viewportWidth = getViewportWidth();
+  const viewportHeight = getViewportHeight();
+
+  const maxWidth = Math.max(FLOATING_PANEL_MIN_WIDTH, viewportWidth - FLOATING_PANEL_MARGIN * 2);
+  const maxHeight = Math.max(FLOATING_PANEL_MIN_HEIGHT, viewportHeight - FLOATING_PANEL_MARGIN * 2);
+  const width = clamp(typeof input.width === 'number' ? input.width : defaults.width, FLOATING_PANEL_MIN_WIDTH, maxWidth);
+  const height = clamp(typeof input.height === 'number' ? input.height : defaults.height, FLOATING_PANEL_MIN_HEIGHT, maxHeight);
+
+  const leftMin = FLOATING_PANEL_MARGIN;
+  const leftMax = Math.max(leftMin, viewportWidth - FLOATING_PANEL_MARGIN - width);
+  const topMin = FLOATING_PANEL_MARGIN;
+  const topMax = Math.max(topMin, viewportHeight - FLOATING_PANEL_MARGIN - height);
+
+  return {
+    undocked: Boolean(input.undocked),
+    left: clamp(typeof input.left === 'number' ? input.left : defaults.left, leftMin, leftMax),
+    top: clamp(typeof input.top === 'number' ? input.top : defaults.top, topMin, topMax),
+    width,
+    height
+  };
+}
+
+function readFloatingPanelLayout(): FloatingPanelLayout | null {
+  try {
+    const raw = window.localStorage.getItem(FLOATING_PANEL_LAYOUT_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<FloatingPanelLayout> | null;
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+
+    return normalizeFloatingPanelLayout(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function writeFloatingPanelLayout(layout: FloatingPanelLayout): void {
+  try {
+    window.localStorage.setItem(FLOATING_PANEL_LAYOUT_STORAGE_KEY, JSON.stringify(layout));
+  } catch {
+    // Ignore storage failures in constrained browser contexts.
+  }
+}
+
+function readPanelRectLayout(panel: HTMLElement): FloatingPanelLayout {
+  const rect = panel.getBoundingClientRect();
+  return normalizeFloatingPanelLayout({
+    undocked: panel.dataset.mount === 'fixed',
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height
+  });
+}
+
+function clearFixedPanelStyles(panel: HTMLElement): void {
+  panel.style.removeProperty('left');
+  panel.style.removeProperty('top');
+  panel.style.removeProperty('width');
+  panel.style.removeProperty('height');
+}
+
+function applyFixedPanelLayout(panel: HTMLElement, layout: FloatingPanelLayout): void {
+  panel.style.left = `${layout.left}px`;
+  panel.style.top = `${layout.top}px`;
+  panel.style.width = `${layout.width}px`;
+  panel.style.height = `${layout.height}px`;
+}
+
+function syncDockButtonVisibility(panel: HTMLElement): void {
+  const dockButton = panel.querySelector<HTMLButtonElement>('.cleanedin-floating-options__dock-btn');
+  if (!dockButton) {
+    return;
   }
 
-  for (const child of directElementChildren(container)) {
-    const nestedRailCards = directElementChildren(child).filter((nestedChild) => hasIdentitySignal(nestedChild) || hasRailModuleSignal(nestedChild));
+  dockButton.hidden = panel.dataset.mount !== 'fixed';
+}
+
+function mountPanelAsFixed(panel: HTMLElement, rawLayout: Partial<FloatingPanelLayout>): FloatingPanelLayout {
+  const nextLayout = normalizeFloatingPanelLayout({ ...rawLayout, undocked: true });
+  panel.dataset.mount = 'fixed';
+  if (panel.parentElement !== document.body) {
+    document.body.appendChild(panel);
+  }
+
+  applyFixedPanelLayout(panel, nextLayout);
+  syncDockButtonVisibility(panel);
+  return nextLayout;
+}
+
+function mountPanelAsRail(panel: HTMLElement, railMountTarget: HTMLElement): void {
+  lastKnownRailMountTarget = railMountTarget;
+  const anchor = resolveRailInsertionAnchor(railMountTarget);
+  if (anchor?.parentElement) {
+    anchor.parentElement.insertBefore(panel, anchor.nextSibling);
+  } else {
+    railMountTarget.append(panel);
+  }
+
+  panel.dataset.mount = 'rail';
+  clearFixedPanelStyles(panel);
+  syncDockButtonVisibility(panel);
+}
+
+function undockPanel(panel: HTMLElement): FloatingPanelLayout {
+  const currentLayout = readPanelRectLayout(panel);
+  const undockedLayout = mountPanelAsFixed(panel, { ...currentLayout, undocked: true });
+  writeFloatingPanelLayout(undockedLayout);
+  return undockedLayout;
+}
+
+function dockPanel(panel: HTMLElement): boolean {
+  const railMountTarget =
+    (lastKnownRailMountTarget && lastKnownRailMountTarget.isConnected ? lastKnownRailMountTarget : null) ??
+    resolveLinkedInLeftRailMountTarget();
+  if (!railMountTarget) {
+    return false;
+  }
+
+  const currentLayout = readPanelRectLayout(panel);
+  writeFloatingPanelLayout({ ...currentLayout, undocked: false });
+  mountPanelAsRail(panel, railMountTarget);
+  return true;
+}
+
+function setupFloatingPanelInteractions(panel: HTMLElement): void {
+  if (panel.getAttribute('data-cleanedin-panel-ready') === '1') {
+    syncDockButtonVisibility(panel);
+    return;
+  }
+
+  const header = panel.querySelector<HTMLElement>('.cleanedin-floating-options__header');
+  const resizeHandle = panel.querySelector<HTMLElement>('.cleanedin-floating-options__resize-handle');
+  const dockButton = panel.querySelector<HTMLButtonElement>('.cleanedin-floating-options__dock-btn');
+
+  if (!header || !resizeHandle || !dockButton) {
+    return;
+  }
+
+  panel.setAttribute('data-cleanedin-panel-ready', '1');
+
+  const setPointerCaptureIfSupported = (target: HTMLElement, pointerId: number): void => {
+    if (typeof target.setPointerCapture === 'function') {
+      target.setPointerCapture(pointerId);
+    }
+  };
+
+  const releasePointerCaptureIfSupported = (target: HTMLElement, pointerId: number): void => {
+    if (typeof target.hasPointerCapture === 'function' && target.hasPointerCapture(pointerId)) {
+      target.releasePointerCapture(pointerId);
+    }
+  };
+
+  const stopGesture = (
+    pointerId: number,
+    move: (event: PointerEvent) => void,
+    finish: (event: PointerEvent) => void
+  ): void => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', finish);
+    window.removeEventListener('pointercancel', finish);
+    releasePointerCaptureIfSupported(header, pointerId);
+    releasePointerCaptureIfSupported(resizeHandle, pointerId);
+  };
+
+  const startDrag = (event: PointerEvent): void => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    if (event.target instanceof Element && event.target.closest('button')) {
+      return;
+    }
+
+    event.preventDefault();
+    let currentLayout = undockPanel(panel);
+    const pointerId = event.pointerId;
+    const startLeft = currentLayout.left;
+    const startTop = currentLayout.top;
+    const startX = event.clientX;
+    const startY = event.clientY;
+
+    panel.dataset.dragging = 'true';
+    setPointerCaptureIfSupported(header, pointerId);
+
+    const move = (moveEvent: PointerEvent): void => {
+      if (moveEvent.pointerId !== pointerId) {
+        return;
+      }
+
+      currentLayout = normalizeFloatingPanelLayout({
+        undocked: true,
+        left: startLeft + (moveEvent.clientX - startX),
+        top: startTop + (moveEvent.clientY - startY),
+        width: currentLayout.width,
+        height: currentLayout.height
+      });
+      applyFixedPanelLayout(panel, currentLayout);
+    };
+
+    const finish = (finishEvent: PointerEvent): void => {
+      if (finishEvent.pointerId !== pointerId) {
+        return;
+      }
+
+      panel.removeAttribute('data-dragging');
+      stopGesture(pointerId, move, finish);
+      currentLayout = normalizeFloatingPanelLayout({ ...readPanelRectLayout(panel), undocked: true });
+      applyFixedPanelLayout(panel, currentLayout);
+      writeFloatingPanelLayout(currentLayout);
+    };
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+  };
+
+  const startResize = (event: PointerEvent): void => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    let currentLayout = undockPanel(panel);
+    const pointerId = event.pointerId;
+    const startWidth = currentLayout.width;
+    const startHeight = currentLayout.height;
+    const startLeft = currentLayout.left;
+    const startTop = currentLayout.top;
+    const startX = event.clientX;
+    const startY = event.clientY;
+
+    panel.dataset.resizing = 'true';
+    setPointerCaptureIfSupported(resizeHandle, pointerId);
+
+    const move = (moveEvent: PointerEvent): void => {
+      if (moveEvent.pointerId !== pointerId) {
+        return;
+      }
+
+      currentLayout = normalizeFloatingPanelLayout({
+        undocked: true,
+        left: startLeft,
+        top: startTop,
+        width: startWidth + (moveEvent.clientX - startX),
+        height: startHeight + (moveEvent.clientY - startY)
+      });
+      applyFixedPanelLayout(panel, currentLayout);
+    };
+
+    const finish = (finishEvent: PointerEvent): void => {
+      if (finishEvent.pointerId !== pointerId) {
+        return;
+      }
+
+      panel.removeAttribute('data-resizing');
+      stopGesture(pointerId, move, finish);
+      currentLayout = normalizeFloatingPanelLayout({ ...readPanelRectLayout(panel), undocked: true });
+      applyFixedPanelLayout(panel, currentLayout);
+      writeFloatingPanelLayout(currentLayout);
+    };
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+  };
+
+  header.addEventListener('pointerdown', startDrag);
+  resizeHandle.addEventListener('pointerdown', startResize);
+  dockButton.addEventListener('pointerdown', (event) => {
+    event.stopPropagation();
+  });
+  dockButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dockPanel(panel);
+  });
+
+  syncDockButtonVisibility(panel);
+}
+
+function resolveRailInsertionAnchor(container: HTMLElement): HTMLElement | null {
+  const directChildren = directElementChildren(container);
+  const isArtdecoCardLike = (node: HTMLElement): boolean =>
+    node.classList.contains('artdeco-card') || Boolean(node.querySelector(':scope > .artdeco-card'));
+  const nonInteractiveCards = directChildren.filter(
+    (child) =>
+      !child.matches('a, button, [role="button"]') &&
+      (isArtdecoCardLike(child) || hasIdentitySignal(child) || hasRailModuleSignal(child))
+  );
+  const railCards =
+    nonInteractiveCards.length > 0
+      ? nonInteractiveCards
+      : directChildren.filter((child) => hasIdentitySignal(child) || hasRailModuleSignal(child));
+
+  if (railCards.length > 0) {
+    return railCards[Math.min(RAIL_INSERTION_CARD_INDEX, railCards.length - 1)] ?? null;
+  }
+
+  for (const child of directChildren) {
+    const nestedChildren = directElementChildren(child);
+    const nestedNonInteractiveCards = nestedChildren.filter(
+      (nestedChild) =>
+        !nestedChild.matches('a, button, [role="button"]') &&
+        (isArtdecoCardLike(nestedChild) || hasIdentitySignal(nestedChild) || hasRailModuleSignal(nestedChild))
+    );
+    const nestedRailCards =
+      nestedNonInteractiveCards.length > 0
+        ? nestedNonInteractiveCards
+        : nestedChildren.filter((nestedChild) => hasIdentitySignal(nestedChild) || hasRailModuleSignal(nestedChild));
+
     if (nestedRailCards.length > 0) {
-      return nestedRailCards[nestedRailCards.length - 1] ?? null;
+      return nestedRailCards[Math.min(RAIL_INSERTION_CARD_INDEX, nestedRailCards.length - 1)] ?? null;
     }
   }
 
@@ -357,12 +724,22 @@ function getFloatingPanelRoot(): HTMLElement {
   const panel = document.createElement('section');
   panel.id = FLOATING_PANEL_ID;
   panel.setAttribute('data-cleanedin-ui', '1');
+  panel.setAttribute('data-mount', 'rail');
 
   const header = document.createElement('header');
   header.className = 'cleanedin-floating-options__header';
 
   const title = document.createElement('strong');
   title.textContent = 'CleanedIn Options';
+
+  const headerActions = document.createElement('div');
+  headerActions.className = 'cleanedin-floating-options__actions';
+
+  const dockButton = document.createElement('button');
+  dockButton.type = 'button';
+  dockButton.className = 'cleanedin-floating-options__dock-btn';
+  dockButton.textContent = 'Dock';
+  dockButton.hidden = true;
 
   const frameWrap = document.createElement('div');
   frameWrap.className = 'cleanedin-floating-options__frame-wrap';
@@ -372,9 +749,15 @@ function getFloatingPanelRoot(): HTMLElement {
   iframe.src = chrome.runtime.getURL('src/popup/index.html');
   iframe.title = 'CleanedIn options';
 
-  header.append(title);
+  const resizeHandle = document.createElement('button');
+  resizeHandle.type = 'button';
+  resizeHandle.className = 'cleanedin-floating-options__resize-handle';
+  resizeHandle.setAttribute('aria-label', 'Resize options panel');
+
+  headerActions.appendChild(dockButton);
+  header.append(title, headerActions);
   frameWrap.appendChild(iframe);
-  panel.append(header, frameWrap);
+  panel.append(header, frameWrap, resizeHandle);
 
   return panel;
 }
@@ -711,23 +1094,24 @@ export function ensureFloatingOptionsPanel(): void {
   ensureStyleInjection();
   const existing = document.getElementById(FLOATING_PANEL_ID);
   const panel = existing instanceof HTMLElement ? existing : getFloatingPanelRoot();
+  setupFloatingPanelInteractions(panel);
   const railMountTarget = resolveLinkedInLeftRailMountTarget();
-
   if (railMountTarget) {
-    const anchor = resolveRailInsertionAnchor(railMountTarget);
-    if (anchor?.parentElement) {
-      anchor.parentElement.insertBefore(panel, anchor.nextSibling);
-    } else {
-      railMountTarget.append(panel);
-    }
-    panel.dataset.mount = 'rail';
+    lastKnownRailMountTarget = railMountTarget;
+  }
+
+  const storedLayout = readFloatingPanelLayout();
+  if (storedLayout?.undocked) {
+    mountPanelAsFixed(panel, storedLayout);
     return;
   }
 
-  panel.dataset.mount = 'fixed';
-  if (panel.parentElement !== document.body) {
-    document.body.appendChild(panel);
+  if (railMountTarget) {
+    mountPanelAsRail(panel, railMountTarget);
+    return;
   }
+
+  mountPanelAsFixed(panel, storedLayout ?? getDefaultFloatingPanelLayout());
 }
 
 export function removeFloatingOptionsPanel(): void {

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   applyPostRendering,
   clearAllHiddenBadges,
@@ -8,6 +8,29 @@ import {
 } from '../../../src/content/render';
 import { ALL_CATEGORIES } from '../../../src/shared/schema';
 import type { CategoryActions, FilterSettings, PostDecision, PostFeatures } from '../../../src/shared/types';
+
+const FLOATING_PANEL_LAYOUT_STORAGE_KEY = 'cleanedin:floating-panel-layout:v1';
+const localStorageState = new Map<string, string>();
+
+beforeEach(() => {
+  const storageMock = {
+    getItem: (key: string): string | null => localStorageState.get(key) ?? null,
+    setItem: (key: string, value: string): void => {
+      localStorageState.set(key, String(value));
+    },
+    removeItem: (key: string): void => {
+      localStorageState.delete(key);
+    },
+    clear: (): void => {
+      localStorageState.clear();
+    }
+  };
+
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: storageMock
+  });
+});
 
 function createCategoryActions(action: 'show' | 'hide' = 'show'): CategoryActions {
   return ALL_CATEGORIES.reduce(
@@ -93,6 +116,7 @@ afterEach(() => {
   clearTemporaryReveals();
   clearAllHiddenBadges();
   removeFloatingOptionsPanel();
+  localStorageState.delete(FLOATING_PANEL_LAYOUT_STORAGE_KEY);
   document.body.innerHTML = '';
 });
 
@@ -299,7 +323,9 @@ describe('floating options panel', () => {
     ensureFloatingOptionsPanel();
 
     const stack = leftSidebar.querySelector('.rail-stack');
-    expect(stack?.lastElementChild?.id).toBe('cleanedin-floating-options');
+    const thirdCard = stack?.querySelector('[data-row="3"]');
+    expect(thirdCard).not.toBeNull();
+    expect(thirdCard?.nextElementSibling?.id).toBe('cleanedin-floating-options');
     expect(stack?.querySelector('#cleanedin-floating-options')?.getAttribute('data-mount')).toBe('rail');
     expect(rightAside.querySelector('#cleanedin-floating-options')).toBeNull();
 
@@ -351,6 +377,219 @@ describe('floating options panel', () => {
     const stack = document.getElementById('left-stack');
     expect(stack?.lastElementChild?.id).toBe('cleanedin-floating-options');
     expect(stack?.querySelector('#cleanedin-floating-options')?.getAttribute('data-mount')).toBe('rail');
+
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: originalChrome
+    });
+  });
+
+  it('mounts fixed with persisted undocked layout even when a rail mount is available', () => {
+    const originalChrome = globalThis.chrome;
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
+        runtime: {
+          getURL: (path: string) => `chrome-extension://test/${path}`
+        }
+      }
+    });
+
+    document.body.innerHTML = `
+      <main>
+        <div class="scaffold-layout__sidebar">
+          <div class="scaffold-layout__sticky">
+            <div class="rail-stack">
+              <a href="https://www.linkedin.com/in/sample-person/">Sample Person</a>
+              <a href="https://www.linkedin.com/groups/">Groups</a>
+            </div>
+          </div>
+        </div>
+      </main>
+    `;
+
+    window.localStorage.setItem(
+      FLOATING_PANEL_LAYOUT_STORAGE_KEY,
+      JSON.stringify({ undocked: true, left: 56, top: 96, width: 420, height: 500 })
+    );
+
+    ensureFloatingOptionsPanel();
+
+    const panel = document.getElementById('cleanedin-floating-options');
+    expect(panel?.getAttribute('data-mount')).toBe('fixed');
+    expect(panel?.parentElement).toBe(document.body);
+    expect(panel?.style.left).toBe('56px');
+    expect(panel?.style.top).toBe('96px');
+    expect(panel?.style.width).toBe('420px');
+    expect(panel?.style.height).toBe('500px');
+
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: originalChrome
+    });
+  });
+
+  it('undocks and persists layout when dragging from the header', () => {
+    const originalChrome = globalThis.chrome;
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
+        runtime: {
+          getURL: (path: string) => `chrome-extension://test/${path}`
+        }
+      }
+    });
+
+    document.body.innerHTML = `
+      <main>
+        <div class="scaffold-layout__sidebar">
+          <div class="scaffold-layout__sticky">
+            <div class="rail-stack">
+              <a href="https://www.linkedin.com/in/sample-person/">Sample Person</a>
+              <a href="https://www.linkedin.com/groups/">Groups</a>
+            </div>
+          </div>
+        </div>
+      </main>
+    `;
+
+    ensureFloatingOptionsPanel();
+
+    const panel = document.getElementById('cleanedin-floating-options');
+    const header = panel?.querySelector<HTMLElement>('.cleanedin-floating-options__header');
+    expect(panel?.getAttribute('data-mount')).toBe('rail');
+    expect(header).not.toBeNull();
+
+    header?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 120, clientY: 120 }));
+    window.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 200, clientY: 190 }));
+    window.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 200, clientY: 190 }));
+
+    const persisted = JSON.parse(window.localStorage.getItem(FLOATING_PANEL_LAYOUT_STORAGE_KEY) ?? '{}') as {
+      undocked?: boolean;
+      left?: number;
+      top?: number;
+    };
+
+    expect(panel?.getAttribute('data-mount')).toBe('fixed');
+    expect(panel?.parentElement).toBe(document.body);
+    expect(persisted.undocked).toBe(true);
+    expect(typeof persisted.left).toBe('number');
+    expect(typeof persisted.top).toBe('number');
+
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: originalChrome
+    });
+  });
+
+  it('undocks and persists size when resizing from the corner handle', () => {
+    const originalChrome = globalThis.chrome;
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
+        runtime: {
+          getURL: (path: string) => `chrome-extension://test/${path}`
+        }
+      }
+    });
+
+    document.body.innerHTML = `
+      <main>
+        <div class="scaffold-layout__sidebar">
+          <div class="scaffold-layout__sticky">
+            <div class="rail-stack">
+              <a href="https://www.linkedin.com/in/sample-person/">Sample Person</a>
+              <a href="https://www.linkedin.com/groups/">Groups</a>
+            </div>
+          </div>
+        </div>
+      </main>
+    `;
+
+    ensureFloatingOptionsPanel();
+
+    const panel = document.getElementById('cleanedin-floating-options');
+    const handle = panel?.querySelector<HTMLElement>('.cleanedin-floating-options__resize-handle');
+    expect(panel?.getAttribute('data-mount')).toBe('rail');
+    expect(handle).not.toBeNull();
+
+    handle?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 280, clientY: 380 }));
+    window.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 360, clientY: 460 }));
+    window.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 360, clientY: 460 }));
+
+    const persisted = JSON.parse(window.localStorage.getItem(FLOATING_PANEL_LAYOUT_STORAGE_KEY) ?? '{}') as {
+      undocked?: boolean;
+      width?: number;
+      height?: number;
+    };
+
+    expect(panel?.getAttribute('data-mount')).toBe('fixed');
+    expect(panel?.parentElement).toBe(document.body);
+    expect(persisted.undocked).toBe(true);
+    expect(typeof persisted.width).toBe('number');
+    expect(typeof persisted.height).toBe('number');
+
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: originalChrome
+    });
+  });
+
+  it('docks back to the rail when Dock is clicked from fixed mode', () => {
+    const originalChrome = globalThis.chrome;
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
+        runtime: {
+          getURL: (path: string) => `chrome-extension://test/${path}`
+        }
+      }
+    });
+
+    document.body.innerHTML = `
+      <main>
+        <div class="scaffold-layout__sidebar">
+          <div class="scaffold-layout__sticky">
+            <div class="rail-stack">
+              <div class="artdeco-card" data-row="1"></div>
+              <div class="artdeco-card" data-row="2"></div>
+              <div class="artdeco-card" data-row="3"></div>
+              <a href="https://www.linkedin.com/in/sample-person/">Sample Person</a>
+              <a href="https://www.linkedin.com/groups/">Groups</a>
+            </div>
+          </div>
+        </div>
+      </main>
+    `;
+
+    window.localStorage.setItem(
+      FLOATING_PANEL_LAYOUT_STORAGE_KEY,
+      JSON.stringify({ undocked: true, left: 64, top: 120, width: 380, height: 500 })
+    );
+
+    ensureFloatingOptionsPanel();
+
+    const panel = document.getElementById('cleanedin-floating-options');
+    const dockButton = panel?.querySelector<HTMLButtonElement>('.cleanedin-floating-options__dock-btn');
+    const leftSidebar = document.querySelector<HTMLElement>('.scaffold-layout__sidebar');
+    const stack = document.querySelector<HTMLElement>('.rail-stack');
+
+    expect(panel?.getAttribute('data-mount')).toBe('fixed');
+    expect(dockButton?.hidden).toBe(false);
+
+    if (leftSidebar) {
+      leftSidebar.className = 'mutated-left-rail';
+    }
+
+    dockButton?.click();
+
+    const persisted = JSON.parse(window.localStorage.getItem(FLOATING_PANEL_LAYOUT_STORAGE_KEY) ?? '{}') as { undocked?: boolean };
+    const thirdCard = stack?.querySelector('[data-row="3"]');
+
+    expect(panel?.getAttribute('data-mount')).toBe('rail');
+    expect(panel?.parentElement).not.toBe(document.body);
+    expect(thirdCard?.nextElementSibling?.id).toBe('cleanedin-floating-options');
+    expect(persisted.undocked).toBe(false);
 
     Object.defineProperty(globalThis, 'chrome', {
       configurable: true,

@@ -44,6 +44,16 @@ function getLeadContextText(post: Parameters<CategoryRule['match']>[0]): string 
   return post.textContent.slice(0, LEAD_CONTEXT_MAX_LENGTH).toLowerCase().replace(/\s+/g, ' ');
 }
 
+function getLeadHeaderContextText(post: Parameters<CategoryRule['match']>[0]): string {
+  const lead = getLeadContextText(post);
+  const boundary = lead.search(/[•·|]/);
+  if (boundary < 0) {
+    return lead;
+  }
+
+  return lead.slice(0, boundary).trim();
+}
+
 function hasLeadActivityContext(post: Parameters<CategoryRule['match']>[0]): boolean {
   const lead = getLeadContextText(post);
   if (lead.replace(/\s+/g, '').startsWith(LEAD_POST_PREFIX)) {
@@ -128,25 +138,41 @@ function collectHeaderActivityTexts(post: Parameters<CategoryRule['match']>[0]):
   return headerTexts;
 }
 
-function hasLikedHeaderActivity(post: Parameters<CategoryRule['match']>[0]): boolean {
-  const joinedHeaderText = collectHeaderActivityTexts(post).join(' ');
-  if (!joinedHeaderText) {
-    return false;
-  }
-
+function hasLikedActivitySignal(text: string): boolean {
   if (
-    /\b(?:likes?|liked)\s+this\b/.test(joinedHeaderText) ||
-    /\band\s+\d+\s+other\s+connections?\s+(?:like|likes|liked)\s+this\b/.test(joinedHeaderText)
+    /\b(?:like|likes|liked)\s+this\b/.test(text) ||
+    /\breacted\s+to\s+this\b/.test(text) ||
+    /\band\s+\d+\s+other\s+connections?\s+(?:like|likes|liked)\s+this\b/.test(text)
   ) {
     return true;
   }
 
-  const compactHeaderText = compactText(joinedHeaderText);
+  const compactHeaderText = compactText(text);
   return (
+    compactHeaderText.includes('likethis') ||
     compactHeaderText.includes('likedthis') ||
     compactHeaderText.includes('likesthis') ||
+    compactHeaderText.includes('reactedtothis') ||
     /and\d+otherconnections?(?:like|likes|liked)this/.test(compactHeaderText)
   );
+}
+
+function hasLikedHeaderActivity(post: Parameters<CategoryRule['match']>[0]): boolean {
+  const headerTexts = collectHeaderActivityTexts(post);
+  if (headerTexts.some((text) => hasLikedActivitySignal(text))) {
+    return true;
+  }
+
+  const leadHeaderText = getLeadHeaderContextText(post);
+  if (!leadHeaderText) {
+    return false;
+  }
+
+  if (!leadHeaderText.replace(/\s+/g, '').startsWith(LEAD_POST_PREFIX)) {
+    return false;
+  }
+
+  return hasLikedActivitySignal(leadHeaderText);
 }
 
 function hasFollowsHeaderActivity(post: Parameters<CategoryRule['match']>[0]): boolean {

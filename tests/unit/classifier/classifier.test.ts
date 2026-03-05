@@ -167,6 +167,37 @@ describe('classifyPost', () => {
     expect(result.labels.has('liked')).toBe(true);
   });
 
+  it('labels liked activity for multi-actor "like this" headers without legacy feed-header selectors', () => {
+    const post = buildPost(`
+      <div>
+        <h2><span>Feed post</span></h2>
+        <p>
+          <a href="https://www.linkedin.com/in/yeliz-ozbay-19679518/"><strong>Yeliz Ozbay</strong></a>
+          and
+          <a href="https://www.linkedin.com/in/ismail-bayraktar-83a4a41/"><strong>Ismail Bayraktar</strong></a>
+          like this
+          Ismail Emanet • 2nd
+        </p>
+      </div>
+    `);
+
+    const result = classifyPost(post);
+    expect(result.labels.has('liked')).toBe(true);
+  });
+
+  it('labels liked activity when multi-actor header uses "reacted to this"', () => {
+    const post = buildPost(`
+      <div data-view-name="feed-full-update">
+        <div data-view-name="feed-header">
+          <span>Feed postAlex and 76 others reacted to thisMorgan • 2nd</span>
+        </div>
+      </div>
+    `);
+
+    const result = classifyPost(post);
+    expect(result.labels.has('liked')).toBe(true);
+  });
+
   it('labels commented/shared posts from feed activity header text', () => {
     const commented = buildPost('<p>Feed postTaylor commented on thisMorgan • 2nd</p>');
     const shared = buildPost('<p>Feed postAcme Inc reposted thisRobin • 2nd</p>');

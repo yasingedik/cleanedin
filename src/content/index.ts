@@ -56,6 +56,24 @@ function debugLog(...args: unknown[]): void {
   }
 }
 
+function isExactLinkedInFeedUrl(urlLike = window.location.href): boolean {
+  try {
+    const parsed = new URL(urlLike);
+    return parsed.hostname === 'www.linkedin.com' && parsed.pathname === '/feed/';
+  } catch {
+    return window.location.hostname === 'www.linkedin.com' && window.location.pathname === '/feed/';
+  }
+}
+
+function syncFloatingOptionsPanelVisibility(): void {
+  if (isExactLinkedInFeedUrl() && activeSettings.showInFeedOptionsPanel) {
+    ensureFloatingOptionsPanel();
+    return;
+  }
+
+  removeFloatingOptionsPanel();
+}
+
 function resolvePostTargetForRoot(root: HTMLElement): PostTarget {
   const nearest = findNearestPostTarget(root);
   if (nearest && nearest.renderRoot === root) {
@@ -372,11 +390,7 @@ function scheduleStartupSettingsSync(): void {
 function bindObserverWhenFeedRootReady(): void {
   stopWaitingForFeedRoot();
 
-  if (!isSupportedFeedPath() || !activeSettings.showInFeedOptionsPanel) {
-    removeFloatingOptionsPanel();
-  } else {
-    ensureFloatingOptionsPanel();
-  }
+  syncFloatingOptionsPanelVisibility();
 
   if (!isSupportedFeedPath()) {
     return;
@@ -407,11 +421,7 @@ async function refreshSettingsAndReevaluate(): Promise<void> {
     activeSettings = await getSettings();
     debugLog('settings-updated', activeSettings);
 
-    if (!isSupportedFeedPath() || !activeSettings.showInFeedOptionsPanel) {
-      removeFloatingOptionsPanel();
-    } else {
-      ensureFloatingOptionsPanel();
-    }
+    syncFloatingOptionsPanelVisibility();
 
     for (const hiddenRoot of document.querySelectorAll<HTMLElement>('.cleanedin-hidden[data-cleanedin-hidden="true"]')) {
       hiddenRoot.classList.remove('cleanedin-hidden');
