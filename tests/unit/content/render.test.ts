@@ -112,6 +112,23 @@ function buildPost(postId = 'urn:li:activity:test'): PostFeatures {
   };
 }
 
+function mockElementRect(element: HTMLElement, width: number, height = 400): void {
+  Object.defineProperty(element, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: width,
+      bottom: height,
+      width,
+      height,
+      toJSON: () => ({})
+    })
+  });
+}
+
 afterEach(() => {
   clearTemporaryReveals();
   clearAllHiddenBadges();
@@ -590,6 +607,210 @@ describe('floating options panel', () => {
     expect(panel?.parentElement).not.toBe(document.body);
     expect(thirdCard?.nextElementSibling?.id).toBe('cleanedin-floating-options');
     expect(persisted.undocked).toBe(false);
+
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: originalChrome
+    });
+  });
+
+  it('sizes the docked panel to the available rail width when returning from fixed mode', () => {
+    const originalChrome = globalThis.chrome;
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
+        runtime: {
+          getURL: (path: string) => `chrome-extension://test/${path}`
+        }
+      }
+    });
+
+    document.body.innerHTML = `
+      <main>
+        <div class="scaffold-layout__sidebar">
+          <div class="scaffold-layout__sticky">
+            <div class="rail-stack">
+              <div class="artdeco-card" data-row="1"></div>
+              <div class="artdeco-card" data-row="2"></div>
+              <div class="artdeco-card" data-row="3"></div>
+              <a href="https://www.linkedin.com/in/sample-person/">Sample Person</a>
+              <a href="https://www.linkedin.com/groups/">Groups</a>
+            </div>
+          </div>
+        </div>
+      </main>
+    `;
+
+    const sidebar = document.querySelector<HTMLElement>('.scaffold-layout__sidebar');
+    const stack = document.querySelector<HTMLElement>('.rail-stack');
+    const lastCard = stack?.querySelector<HTMLElement>('[data-row="3"]');
+
+    if (sidebar) {
+      mockElementRect(sidebar, 248);
+    }
+    if (stack) {
+      mockElementRect(stack, 236);
+    }
+    if (lastCard) {
+      mockElementRect(lastCard, 224);
+    }
+
+    window.localStorage.setItem(
+      FLOATING_PANEL_LAYOUT_STORAGE_KEY,
+      JSON.stringify({ undocked: true, left: 64, top: 120, width: 420, height: 500 })
+    );
+
+    ensureFloatingOptionsPanel();
+
+    const panel = document.getElementById('cleanedin-floating-options');
+    const dockButton = panel?.querySelector<HTMLButtonElement>('.cleanedin-floating-options__dock-btn');
+
+    dockButton?.click();
+
+    expect(panel?.getAttribute('data-mount')).toBe('rail');
+    expect(panel?.style.width).toBe('100%');
+    expect(panel?.style.minWidth).toBe('0px');
+    expect(panel?.style.maxWidth).toBe('224px');
+
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: originalChrome
+    });
+  });
+
+  it('applies embedded popup height reports to the docked iframe', () => {
+    const originalChrome = globalThis.chrome;
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
+        runtime: {
+          getURL: (path: string) => `chrome-extension://test/${path}`
+        }
+      }
+    });
+
+    document.body.innerHTML = `
+      <main>
+        <div class="scaffold-layout__sidebar">
+          <div class="scaffold-layout__sticky">
+            <div class="rail-stack">
+              <div class="artdeco-card" data-row="1"></div>
+              <div class="artdeco-card" data-row="2"></div>
+              <div class="artdeco-card" data-row="3"></div>
+              <a href="https://www.linkedin.com/in/sample-person/">Sample Person</a>
+              <a href="https://www.linkedin.com/groups/">Groups</a>
+            </div>
+          </div>
+        </div>
+      </main>
+    `;
+
+    ensureFloatingOptionsPanel();
+
+    const panel = document.getElementById('cleanedin-floating-options');
+    const iframe = panel?.querySelector<HTMLIFrameElement>('.cleanedin-floating-options__frame');
+    const frameWrap = panel?.querySelector<HTMLElement>('.cleanedin-floating-options__frame-wrap');
+
+    expect(panel?.getAttribute('data-mount')).toBe('rail');
+    expect(iframe).not.toBeNull();
+    expect(frameWrap).not.toBeNull();
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          source: 'cleanedin-popup',
+          type: 'popup-height',
+          height: 612
+        },
+        source: iframe?.contentWindow ?? null
+      })
+    );
+
+    expect(frameWrap?.style.height).toBe('612px');
+    expect(iframe?.style.height).toBe('612px');
+
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: originalChrome
+    });
+  });
+
+  it('docks into a sidebar that is a sibling of main in the current LinkedIn scaffold layout', () => {
+    const originalChrome = globalThis.chrome;
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
+        runtime: {
+          getURL: (path: string) => `chrome-extension://test/${path}`
+        }
+      }
+    });
+
+    document.body.innerHTML = `
+      <div class="scaffold-layout">
+        <div class="scaffold-layout__content scaffold-layout__content--sidebar-main-aside">
+          <aside class="scaffold-layout__sidebar">
+            <div class="scaffold-layout__sticky">
+              <div class="scaffold-layout__sticky-content">
+                <div role="region" aria-label="Side Bar">
+                  <div class="artdeco-card" data-row="1">
+                    <a href="https://www.linkedin.com/in/sample-person/">Sample Person</a>
+                  </div>
+                  <div class="artdeco-card" data-row="2">
+                    <a href="https://www.linkedin.com/me/profile-views/">Profile viewers</a>
+                  </div>
+                  <div class="artdeco-card" data-row="3">
+                    <a href="https://www.linkedin.com/groups/">Groups</a>
+                    <a href="https://www.linkedin.com/events/">Events</a>
+                    <a href="https://www.linkedin.com/mynetwork/network-manager/newsletters">Newsletters</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+          <main aria-label="Main Feed">
+            <div class="scaffold-finite-scroll__content" data-finite-scroll-hotkey-context="FEED"></div>
+          </main>
+        </div>
+      </div>
+    `;
+
+    const sidebar = document.querySelector<HTMLElement>('.scaffold-layout__sidebar');
+    const stickyContent = document.querySelector<HTMLElement>('.scaffold-layout__sticky-content');
+    const railRegion = document.querySelector<HTMLElement>('[role="region"][aria-label="Side Bar"]');
+    const lastCard = railRegion?.querySelector<HTMLElement>('[data-row="3"]');
+
+    if (sidebar) {
+      mockElementRect(sidebar, 260);
+    }
+    if (stickyContent) {
+      mockElementRect(stickyContent, 248);
+    }
+    if (railRegion) {
+      mockElementRect(railRegion, 236);
+    }
+    if (lastCard) {
+      mockElementRect(lastCard, 224);
+    }
+
+    window.localStorage.setItem(
+      FLOATING_PANEL_LAYOUT_STORAGE_KEY,
+      JSON.stringify({ undocked: true, left: 80, top: 120, width: 420, height: 500 })
+    );
+
+    ensureFloatingOptionsPanel();
+
+    const panel = document.getElementById('cleanedin-floating-options');
+    const dockButton = panel?.querySelector<HTMLButtonElement>('.cleanedin-floating-options__dock-btn');
+
+    expect(panel?.getAttribute('data-mount')).toBe('fixed');
+
+    dockButton?.click();
+
+    expect(panel?.getAttribute('data-mount')).toBe('rail');
+    expect(panel?.parentElement).toBe(railRegion);
+    expect(railRegion?.lastElementChild?.id).toBe('cleanedin-floating-options');
+    expect(panel?.style.maxWidth).toBe('224px');
 
     Object.defineProperty(globalThis, 'chrome', {
       configurable: true,

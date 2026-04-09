@@ -44,6 +44,7 @@ let stopRootAvailabilityWatcher: (() => void) | null = null;
 let noPostsFallbackTimer: number | null = null;
 let bodyFallbackSeedTimer: number | null = null;
 let startupSettingsSyncTimer: number | null = null;
+let activationSequence: Promise<void> = Promise.resolve();
 
 let activeSettings: FilterSettings = {
   ...DEFAULT_SYNC_SETTINGS,
@@ -76,7 +77,7 @@ function syncFloatingOptionsPanelVisibility(): void {
 
 function resolvePostTargetForRoot(root: HTMLElement): PostTarget {
   const nearest = findNearestPostTarget(root);
-  if (nearest && nearest.renderRoot === root) {
+  if (nearest) {
     return nearest;
   }
 
@@ -117,10 +118,6 @@ function evaluatePostTarget(target: PostTarget): void {
       root.removeAttribute('data-cleanedin-age-days');
     }
   }
-}
-
-function evaluatePost(root: HTMLElement): void {
-  evaluatePostTarget(resolvePostTargetForRoot(root));
 }
 
 function updateObservedPostsDiagnostics(newRootsCount: number): void {
@@ -167,13 +164,22 @@ function processObservedRoots(roots: HTMLElement[]): void {
 }
 
 function reevaluateAllTrackedPosts(): void {
+  const nextTargets: PostTarget[] = [];
+
   for (const root of [...trackedRoots]) {
     if (!root.isConnected) {
       trackedRoots.delete(root);
       continue;
     }
 
-    evaluatePost(root);
+    nextTargets.push(resolvePostTargetForRoot(root));
+  }
+
+  trackedRoots.clear();
+
+  for (const target of selectTopTargets(nextTargets)) {
+    trackedRoots.add(target.renderRoot);
+    evaluatePostTarget(target);
   }
 }
 
@@ -196,16 +202,14 @@ function collectVisiblePostRoots(): HTMLElement[] {
 
   scopes.add(document);
 
-  const roots = new Set<HTMLElement>();
+  const targets: PostTarget[] = [];
   for (const scope of scopes) {
-    for (const target of findPostTargets(scope)) {
-      if (target.renderRoot.isConnected) {
-        roots.add(target.renderRoot);
-      }
-    }
+    targets.push(...findPostTargets(scope));
   }
 
-  return [...roots];
+  return selectTopTargets(targets)
+    .map((target) => target.renderRoot)
+    .filter((root) => root.isConnected);
 }
 
 function resolveObserverRoot(): HTMLElement | null {
@@ -469,15 +473,33 @@ async function activateForCurrentRoute(refreshSettings = false): Promise<void> {
   scheduleStartupSettingsSync();
 }
 
+function queueActivation(refreshSettings = false): Promise<void> {
+  activationSequence = activationSequence
+    .catch(() => undefined)
+    .then(async () => {
+      await activateForCurrentRoute(refreshSettings);
+    })
+    .catch((error) => {
+      console.error('[cleanedin] failed to activate for current route', error);
+    });
+
+  return activationSequence;
+}
+
 async function boot(): Promise<void> {
   setRootModeDiagnostics();
+
+  stopRouteWatcher = watchRouteChanges(() => {
+    void queueActivation(true);
+  });
+
   try {
     activeSettings = await getSettings();
   } catch (error) {
     console.error('[cleanedin] failed to load settings at boot, using defaults', error);
   }
 
-  await activateForCurrentRoute(false);
+  await queueActivation(false);
 
   stopStorageWatcher = subscribeToStorageChanges(async (changes, area) => {
     if (area !== 'sync' && area !== 'local') {
@@ -490,13 +512,21 @@ async function boot(): Promise<void> {
 
     await refreshSettingsAndReevaluate();
   });
-
-  stopRouteWatcher = watchRouteChanges(async () => {
-    await activateForCurrentRoute(true);
-  });
 }
 
 void boot();
+
+window.addEventListener('pageshow', () => {
+  if (!isSupportedFeedPath()) {
+    return;
+  }
+
+  if (observedPostsCount > 0 && document.getElementById('cleanedin-floating-options')) {
+    return;
+  }
+
+  void queueActivation(true);
+});
 
 window.addEventListener('beforeunload', () => {
   observer?.stop();

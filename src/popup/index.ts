@@ -68,6 +68,8 @@ const ACTION_LABELS: Record<AnyAction, string> = {
   hide: 'Hide'
 };
 const SECTION_STATE_STORAGE_KEY = 'cleanedin-popup-section-state-v1';
+const POPUP_MESSAGE_SOURCE = 'cleanedin-popup';
+const POPUP_HEIGHT_MESSAGE_TYPE = 'popup-height';
 
 function getElement<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
@@ -135,6 +137,65 @@ function setStatus(text: string): void {
 function applyPopupModeClass(): void {
   const mode = window.top === window ? 'standalone' : 'embedded';
   document.documentElement.dataset.cleanedinPopupMode = mode;
+}
+
+function isEmbeddedPopup(): boolean {
+  return document.documentElement.dataset.cleanedinPopupMode === 'embedded';
+}
+
+function computeEmbeddedPopupHeight(): number {
+  const popup = document.querySelector<HTMLElement>('.popup');
+  const popupHeight = popup ? popup.getBoundingClientRect().height : 0;
+  return Math.max(
+    Math.ceil(popupHeight),
+    document.body.scrollHeight,
+    document.body.offsetHeight,
+    document.documentElement.scrollHeight,
+    document.documentElement.offsetHeight
+  );
+}
+
+function reportEmbeddedPopupHeight(): void {
+  if (!isEmbeddedPopup()) {
+    return;
+  }
+
+  window.parent.postMessage(
+    {
+      source: POPUP_MESSAGE_SOURCE,
+      type: POPUP_HEIGHT_MESSAGE_TYPE,
+      height: computeEmbeddedPopupHeight()
+    },
+    '*'
+  );
+}
+
+function setupEmbeddedPopupHeightReporting(): void {
+  if (!isEmbeddedPopup()) {
+    return;
+  }
+
+  const scheduleReport = (): void => {
+    window.requestAnimationFrame(() => {
+      reportEmbeddedPopupHeight();
+    });
+  };
+
+  scheduleReport();
+  window.addEventListener('load', scheduleReport);
+  window.addEventListener('resize', scheduleReport);
+
+  if (typeof ResizeObserver === 'function') {
+    const observer = new ResizeObserver(() => {
+      scheduleReport();
+    });
+
+    observer.observe(document.body);
+    const popup = document.querySelector<HTMLElement>('.popup');
+    if (popup) {
+      observer.observe(popup);
+    }
+  }
 }
 
 function setActionSwitch(button: HTMLButtonElement, action: AnyAction): void {
@@ -560,6 +621,7 @@ async function boot(): Promise<void> {
   renderDonationLinks();
   bindUIEvents();
   hydrate(await getSettings());
+  setupEmbeddedPopupHeightReporting();
 }
 
 void boot();

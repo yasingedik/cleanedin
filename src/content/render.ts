@@ -8,6 +8,7 @@ const BADGE_FOR_ATTR = 'data-cleanedin-badge-for';
 const POST_ID_ATTR = 'data-cleanedin-post-id';
 const FLOATING_PANEL_ID = 'cleanedin-floating-options';
 const FLOATING_PANEL_LAYOUT_STORAGE_KEY = 'cleanedin:floating-panel-layout:v1';
+const FLOATING_PANEL_POPUP_HEIGHT_ATTR = 'data-cleanedin-popup-height';
 const FLOATING_PANEL_MARGIN = 12;
 const FLOATING_PANEL_DEFAULT_TOP = 84;
 const FLOATING_PANEL_DEFAULT_WIDTH = 330;
@@ -15,8 +16,10 @@ const FLOATING_PANEL_DEFAULT_HEIGHT = 620;
 const FLOATING_PANEL_MIN_WIDTH = 260;
 const FLOATING_PANEL_MIN_HEIGHT = 320;
 const RAIL_INSERTION_CARD_INDEX = 2;
-const LEFT_RAIL_CANDIDATE_SELECTORS = ['main .scaffold-layout__sidebar', 'main .scaffold-layout__aside', 'main aside'] as const;
+const LEFT_RAIL_CANDIDATE_SELECTORS = ['.scaffold-layout__sidebar', '.scaffold-layout__aside', 'aside'] as const;
 const IDENTITY_MODULE_ROOT_SELECTORS = ['[data-view-name="identity-module"]', '.feed-identity-module'] as const;
+const POPUP_MESSAGE_SOURCE = 'cleanedin-popup';
+const POPUP_HEIGHT_MESSAGE_TYPE = 'popup-height';
 
 const temporaryRevealPostIds = new Set<string>();
 let lastKnownRailMountTarget: HTMLElement | null = null;
@@ -26,6 +29,12 @@ type FloatingPanelLayout = {
   left: number;
   top: number;
   width: number;
+  height: number;
+};
+
+type PopupHeightMessage = {
+  source: typeof POPUP_MESSAGE_SOURCE;
+  type: typeof POPUP_HEIGHT_MESSAGE_TYPE;
   height: number;
 };
 
@@ -126,7 +135,7 @@ function getRailScore(candidate: HTMLElement): number {
 }
 
 function resolveLinkedInLeftRailHost(): HTMLElement | null {
-  const sidebarCandidates = [...document.querySelectorAll<HTMLElement>('main .scaffold-layout__sidebar')].filter(
+  const sidebarCandidates = [...document.querySelectorAll<HTMLElement>('.scaffold-layout__sidebar')].filter(
     (candidate) => candidate.isConnected && isLikelyLeftRailColumn(candidate)
   );
   const profileSidebars = sidebarCandidates.filter((candidate) => profileSignalCount(candidate) > 0);
@@ -262,6 +271,10 @@ function resolveMountStackTarget(container: HTMLElement): HTMLElement {
   const rankedCandidates = candidates
     .map((candidate) => {
       if (candidate.matches(RAIL_STACK_SIGNAL_SELECTORS.join(', '))) {
+        return null;
+      }
+
+      if (candidate.classList.contains('artdeco-card')) {
         return null;
       }
 
@@ -437,11 +450,13 @@ function readPanelRectLayout(panel: HTMLElement): FloatingPanelLayout {
   });
 }
 
-function clearFixedPanelStyles(panel: HTMLElement): void {
+function clearPanelInlineLayoutStyles(panel: HTMLElement): void {
   panel.style.removeProperty('left');
   panel.style.removeProperty('top');
   panel.style.removeProperty('width');
   panel.style.removeProperty('height');
+  panel.style.removeProperty('min-width');
+  panel.style.removeProperty('max-width');
 }
 
 function applyFixedPanelLayout(panel: HTMLElement, layout: FloatingPanelLayout): void {
@@ -449,6 +464,119 @@ function applyFixedPanelLayout(panel: HTMLElement, layout: FloatingPanelLayout):
   panel.style.top = `${layout.top}px`;
   panel.style.width = `${layout.width}px`;
   panel.style.height = `${layout.height}px`;
+}
+
+function isPopupHeightMessage(value: unknown): value is PopupHeightMessage {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'source' in value &&
+    'type' in value &&
+    'height' in value &&
+    (value as { source?: unknown }).source === POPUP_MESSAGE_SOURCE &&
+    (value as { type?: unknown }).type === POPUP_HEIGHT_MESSAGE_TYPE &&
+    typeof (value as { height?: unknown }).height === 'number'
+  );
+}
+
+function getFloatingPanelFrameWrap(panel: HTMLElement): HTMLElement | null {
+  return panel.querySelector<HTMLElement>('.cleanedin-floating-options__frame-wrap');
+}
+
+function getFloatingPanelFrame(panel: HTMLElement): HTMLIFrameElement | null {
+  return panel.querySelector<HTMLIFrameElement>('.cleanedin-floating-options__frame');
+}
+
+function readReportedPopupHeight(panel: HTMLElement): number | null {
+  const raw = panel.getAttribute(FLOATING_PANEL_POPUP_HEIGHT_ATTR);
+  if (!raw) {
+    return null;
+  }
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return Math.round(parsed);
+}
+
+function syncEmbeddedPopupHeight(panel: HTMLElement): void {
+  const frameWrap = getFloatingPanelFrameWrap(panel);
+  const iframe = getFloatingPanelFrame(panel);
+  if (!frameWrap || !iframe) {
+    return;
+  }
+
+  if (panel.dataset.mount !== 'rail') {
+    frameWrap.style.removeProperty('height');
+    iframe.style.removeProperty('height');
+    return;
+  }
+
+  const reportedHeight = readReportedPopupHeight(panel);
+  if (!reportedHeight) {
+    frameWrap.style.removeProperty('height');
+    iframe.style.removeProperty('height');
+    return;
+  }
+
+  frameWrap.style.height = `${reportedHeight}px`;
+  iframe.style.height = `${reportedHeight}px`;
+}
+
+function getMeasuredWidth(element: HTMLElement | null | undefined): number | null {
+  if (!element) {
+    return null;
+  }
+
+  const width = element.getBoundingClientRect().width;
+  if (!Number.isFinite(width) || width <= 0) {
+    return null;
+  }
+
+  return width;
+}
+
+function resolveDockedPanelWidth(panel: HTMLElement, railMountTarget: HTMLElement): number | null {
+  const widthCandidates = new Set<number>();
+
+  const registerWidth = (width: number | null): void => {
+    if (typeof width !== 'number') {
+      return;
+    }
+
+    widthCandidates.add(Math.max(0, Math.floor(width)));
+  };
+
+  registerWidth(getMeasuredWidth(railMountTarget));
+  registerWidth(getMeasuredWidth(railMountTarget.closest<HTMLElement>('.scaffold-layout__sidebar')));
+
+  const structuralSiblings = directElementChildren(railMountTarget).filter(
+    (child) => child !== panel && child.matches('div, section, aside, article')
+  );
+  registerWidth(getMeasuredWidth(structuralSiblings[structuralSiblings.length - 1] ?? null));
+
+  if (widthCandidates.size === 0) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(...widthCandidates));
+}
+
+function applyRailPanelLayout(panel: HTMLElement, railMountTarget: HTMLElement): void {
+  clearPanelInlineLayoutStyles(panel);
+  panel.style.width = '100%';
+  panel.style.minWidth = '0px';
+
+  const dockedWidth = resolveDockedPanelWidth(panel, railMountTarget);
+  if (typeof dockedWidth === 'number' && dockedWidth > 0) {
+    panel.style.maxWidth = `${dockedWidth}px`;
+  } else {
+    panel.style.maxWidth = '100%';
+  }
+
+  syncEmbeddedPopupHeight(panel);
 }
 
 function syncDockButtonVisibility(panel: HTMLElement): void {
@@ -467,7 +595,9 @@ function mountPanelAsFixed(panel: HTMLElement, rawLayout: Partial<FloatingPanelL
     document.body.appendChild(panel);
   }
 
+  clearPanelInlineLayoutStyles(panel);
   applyFixedPanelLayout(panel, nextLayout);
+  syncEmbeddedPopupHeight(panel);
   syncDockButtonVisibility(panel);
   return nextLayout;
 }
@@ -482,7 +612,7 @@ function mountPanelAsRail(panel: HTMLElement, railMountTarget: HTMLElement): voi
   }
 
   panel.dataset.mount = 'rail';
-  clearFixedPanelStyles(panel);
+  applyRailPanelLayout(panel, railMountTarget);
   syncDockButtonVisibility(panel);
 }
 
@@ -509,6 +639,7 @@ function dockPanel(panel: HTMLElement): boolean {
 
 function setupFloatingPanelInteractions(panel: HTMLElement): void {
   if (panel.getAttribute('data-cleanedin-panel-ready') === '1') {
+    syncEmbeddedPopupHeight(panel);
     syncDockButtonVisibility(panel);
     return;
   }
@@ -516,12 +647,33 @@ function setupFloatingPanelInteractions(panel: HTMLElement): void {
   const header = panel.querySelector<HTMLElement>('.cleanedin-floating-options__header');
   const resizeHandle = panel.querySelector<HTMLElement>('.cleanedin-floating-options__resize-handle');
   const dockButton = panel.querySelector<HTMLButtonElement>('.cleanedin-floating-options__dock-btn');
+  const iframe = getFloatingPanelFrame(panel);
 
-  if (!header || !resizeHandle || !dockButton) {
+  if (!header || !resizeHandle || !dockButton || !iframe) {
     return;
   }
 
   panel.setAttribute('data-cleanedin-panel-ready', '1');
+
+  const syncFrameHeightFromMessage = (event: MessageEvent): void => {
+    if (!panel.isConnected) {
+      window.removeEventListener('message', syncFrameHeightFromMessage);
+      return;
+    }
+
+    if (event.source !== iframe.contentWindow) {
+      return;
+    }
+
+    if (!isPopupHeightMessage(event.data)) {
+      return;
+    }
+
+    panel.setAttribute(FLOATING_PANEL_POPUP_HEIGHT_ATTR, String(Math.max(1, Math.round(event.data.height))));
+    syncEmbeddedPopupHeight(panel);
+  };
+
+  window.addEventListener('message', syncFrameHeightFromMessage);
 
   const setPointerCaptureIfSupported = (target: HTMLElement, pointerId: number): void => {
     if (typeof target.setPointerCapture === 'function') {
@@ -711,12 +863,16 @@ function resolveLinkedInLeftRailMountTarget(): HTMLElement | null {
 
   const stickyHost =
     railHost.querySelector<HTMLElement>(':scope > .scaffold-layout__sticky') ?? railHost.querySelector<HTMLElement>('.scaffold-layout__sticky');
+  const stickyContent =
+    stickyHost?.querySelector<HTMLElement>(':scope > .scaffold-layout__sticky-content') ??
+    stickyHost?.querySelector<HTMLElement>('.scaffold-layout__sticky-content') ??
+    null;
 
-  if (!stickyHost) {
+  if (!stickyHost && !stickyContent) {
     return normalizeRailMountTarget(resolveMountStackTarget(railHost));
   }
 
-  const stackTarget = resolveMountStackTarget(stickyHost);
+  const stackTarget = resolveMountStackTarget(stickyContent ?? stickyHost ?? railHost);
   return normalizeRailMountTarget(stackTarget);
 }
 
@@ -748,6 +904,7 @@ function getFloatingPanelRoot(): HTMLElement {
   iframe.className = 'cleanedin-floating-options__frame';
   iframe.src = chrome.runtime.getURL('src/popup/index.html');
   iframe.title = 'CleanedIn options';
+  iframe.scrolling = 'no';
 
   const resizeHandle = document.createElement('button');
   resizeHandle.type = 'button';

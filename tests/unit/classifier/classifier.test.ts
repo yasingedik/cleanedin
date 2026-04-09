@@ -105,6 +105,22 @@ describe('classifyPost', () => {
     expect(result.labels.has('ad')).toBe(true);
   });
 
+  it('labels promoted post when the marker is rendered as an aria-hidden header label', () => {
+    const post = buildPost(`
+      <div>
+        <div>
+          <a href="https://www.linkedin.com/in/sample-person/">Sample Person</a>
+          <span aria-hidden="true">Promoted</span>
+          <button aria-label="Open control menu for post by Sample Person">More</button>
+        </div>
+        <p data-view-name="feed-commentary">Sample promoted body copy.</p>
+      </div>
+    `);
+
+    const result = classifyPost(post);
+    expect(result.labels.has('ad')).toBe(true);
+  });
+
   it('labels video posts by structure', () => {
     const post = buildPost('<video src="blob:test"></video>');
     const result = classifyPost(post);

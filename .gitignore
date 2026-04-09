@@ -21,3 +21,4 @@ resources/real/
 *.mobileprovision
 
 firebase-debug.log
+resources/live.html

@@ -1,6 +1,12 @@
 import type { CategoryRule } from './types';
 import { rootHasAnySelector } from './helpers';
 
+const PROFILE_LINK_SELECTOR = ['a[href*="/in/"]', 'a[href*="/company/"]', 'a[href*="/school/"]', 'a[href*="/groups/"]'].join(', ');
+const COMMENTARY_SELECTOR = ['[data-view-name="feed-commentary"]', '[data-view-name*="commentary"]', '[data-testid="expandable-text-box"]'].join(
+  ', '
+);
+const HEADER_CONTROL_SELECTOR = 'button, [role="button"], a[role="button"]';
+
 function normalizeText(value: string): string {
   return value.toLowerCase().replace(/\s+/g, ' ').trim();
 }
@@ -37,6 +43,56 @@ function containsFollowersToken(value: string): boolean {
   return compact.includes('follower') || compact.includes('followers');
 }
 
+function hasHeaderControlSignal(scope: ParentNode): boolean {
+  const controls = scope.querySelectorAll<HTMLElement>(HEADER_CONTROL_SELECTOR);
+
+  for (const control of [...controls].slice(0, 16)) {
+    const signal = normalizeText(`${control.getAttribute('aria-label') ?? ''} ${control.textContent ?? ''}`);
+    if (signal.includes('control menu') || signal.includes('more options') || signal.includes('follow')) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function appearsBeforeCommentary(node: HTMLElement, scope: ParentNode): boolean {
+  const commentary = scope.querySelector<HTMLElement>(COMMENTARY_SELECTOR);
+  if (!commentary) {
+    return true;
+  }
+
+  return Boolean(node.compareDocumentPosition(commentary) & Node.DOCUMENT_POSITION_FOLLOWING);
+}
+
+function isLikelyPromotedHeaderLabel(node: HTMLElement, scope: ParentNode): boolean {
+  if (node.closest(COMMENTARY_SELECTOR) || node.closest('time')) {
+    return false;
+  }
+
+  if (node.closest('[data-view-name*="feed-header"], [data-view-name*="feed-actor"]')) {
+    return true;
+  }
+
+  if (!appearsBeforeCommentary(node, scope)) {
+    return false;
+  }
+
+  let ancestor: HTMLElement | null = node;
+  let depth = 0;
+  while (ancestor && ancestor !== scope && depth < 6) {
+    const hasProfileLink = Boolean(ancestor.querySelector(PROFILE_LINK_SELECTOR));
+    if (hasProfileLink && hasHeaderControlSignal(ancestor)) {
+      return true;
+    }
+
+    ancestor = ancestor.parentElement;
+    depth += 1;
+  }
+
+  return Boolean(scope.querySelector(PROFILE_LINK_SELECTOR)) && hasHeaderControlSignal(scope);
+}
+
 function hasExactPromotedHeaderLabel(scope: ParentNode): boolean {
   const labelNodes = scope.querySelectorAll<HTMLElement>(
     [
@@ -44,12 +100,13 @@ function hasExactPromotedHeaderLabel(scope: ParentNode): boolean {
       '[data-view-name*="feed-header"] span',
       '[data-view-name*="feed-actor"] p',
       '[data-view-name*="feed-actor"] span',
-      '[data-view-name*="feed-actor"] div'
+      '[data-view-name*="feed-actor"] div',
+      '[aria-hidden="true"]'
     ].join(', ')
   );
 
   for (const node of [...labelNodes].slice(0, 48)) {
-    if (normalizeText(node.textContent ?? '') === 'promoted') {
+    if (normalizeText(node.textContent ?? '') === 'promoted' && isLikelyPromotedHeaderLabel(node, scope)) {
       return true;
     }
   }

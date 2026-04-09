@@ -241,6 +241,37 @@ describe('feed root detection', () => {
     expect(roots.some((root) => root.id === 'modern-recommended-card')).toBe(true);
   });
 
+  it('collapses live-style wrapped cards into a single logical post target', () => {
+    document.body.innerHTML = `
+      <main>
+        <div class="scaffold-finite-scroll__content" data-finite-scroll-hotkey-context="FEED">
+          <div id="wrapper" data-id="urn:li:activity:1" class="relative">
+            <div data-view-name="feed-full-update">
+              <div>
+                <article id="article-root" role="article" data-urn="urn:li:activity:1">
+                  <a href="/in/sample-person">Sample Person</a>
+                  <span> • 1st</span>
+                  <time>1h</time>
+                  <p data-testid="expandable-text-box">Live-style wrapped feed card.</p>
+                  <button aria-label="Open control menu for post by Sample Person">More</button>
+                  <button>Like</button>
+                  <button>Comment</button>
+                  <button>Repost</button>
+                </article>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    `;
+
+    const feedRoot = resolveFeedRoot(document);
+    const targets = findPostTargets(feedRoot as HTMLElement);
+
+    expect(targets.filter((target) => target.renderRoot.id === 'wrapper')).toHaveLength(1);
+    expect(targets.some((target) => target.renderRoot.id === 'article-root')).toBe(false);
+  });
+
   it('ignores update links inside left rail modules', () => {
     document.body.innerHTML = `
       <main>

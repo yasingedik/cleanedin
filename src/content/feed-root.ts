@@ -308,6 +308,11 @@ function isLikelyFeatureRoot(root: HTMLElement): boolean {
 }
 
 function resolveFeatureRoot(root: HTMLElement): HTMLElement {
+  const ancestorFeature = root.closest<HTMLElement>(FEATURE_ROOT_SELECTOR);
+  if (ancestorFeature && isLikelyFeatureRoot(ancestorFeature)) {
+    return ancestorFeature;
+  }
+
   if (root.matches(FEATURE_ROOT_SELECTOR)) {
     return root;
   }

@@ -88,11 +88,18 @@
   inset: auto !important;
   transform: none !important;
   width: 100%;
+  height: auto;
+  min-height: 0;
+  min-width: 0;
   max-width: 100%;
   flex: 0 0 100%;
   align-self: stretch;
   clear: both;
   z-index: auto;
+}
+
+#cleanedin-floating-options[data-mount='rail'] .cleanedin-floating-options__frame-wrap {
+  flex: 0 0 auto;
 }
 
 #cleanedin-floating-options[data-mount='fixed'] {

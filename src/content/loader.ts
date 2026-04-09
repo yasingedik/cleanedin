@@ -9,9 +9,16 @@ type LoaderState =
   | 'failed';
 
 let loaderMarker: HTMLMetaElement | null = null;
+const LOADER_RETRY_DELAYS_MS = [0, 250, 1000] as const;
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 function ensureLoaderMarker(): void {
@@ -94,26 +101,40 @@ async function bootLoader(): Promise<void> {
 
   const bundleUrl = chrome.runtime.getURL('content.js');
 
-  try {
-    await import(/* @vite-ignore */ bundleUrl);
-    setLoaderState('direct-import-ok');
-    console.log('[cleanedin] module imported via chrome-extension URL');
-    return;
-  } catch (directImportError) {
-    setLoaderState('direct-import-failed', directImportError);
-    console.warn('[cleanedin] direct module import failed, trying bundled source fallback', directImportError);
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < LOADER_RETRY_DELAYS_MS.length; attempt += 1) {
+    const retryDelay = LOADER_RETRY_DELAYS_MS[attempt];
+    if (retryDelay > 0) {
+      await sleep(retryDelay);
+    }
+
+    try {
+      await import(/* @vite-ignore */ bundleUrl);
+      setLoaderState('direct-import-ok');
+      console.log('[cleanedin] module imported via chrome-extension URL');
+      return;
+    } catch (directImportError) {
+      lastError = directImportError;
+      setLoaderState('direct-import-failed', directImportError);
+      console.warn(`[cleanedin] direct module import failed on attempt ${attempt + 1}`, directImportError);
+    }
+
+    try {
+      setLoaderState('fallback-request');
+      const bundleCode = await requestContentBundle();
+      await importContentFromBlob(bundleCode);
+      setLoaderState('blob-import-ok');
+      console.log('[cleanedin] module imported via blob fallback');
+      return;
+    } catch (fallbackError) {
+      lastError = fallbackError;
+      console.warn(`[cleanedin] blob fallback import failed on attempt ${attempt + 1}`, fallbackError);
+    }
   }
 
-  try {
-    setLoaderState('fallback-request');
-    const bundleCode = await requestContentBundle();
-    await importContentFromBlob(bundleCode);
-    setLoaderState('blob-import-ok');
-    console.log('[cleanedin] module imported via blob fallback');
-  } catch (fallbackError) {
-    setLoaderState('failed', fallbackError);
-    console.error('[cleanedin] content loader failed to import module', fallbackError);
-  }
+  setLoaderState('failed', lastError);
+  console.error('[cleanedin] content loader failed to import module', lastError);
 }
 
 void bootLoader();
