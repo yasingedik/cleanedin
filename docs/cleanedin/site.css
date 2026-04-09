@@ -24,6 +24,8 @@ main {
   max-width: 920px;
   margin: 32px auto;
   padding: 0 16px 24px;
+  display: grid;
+  gap: 16px;
 }
 
 .site-header,
@@ -64,10 +66,6 @@ main {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 24px;
-}
-
-.hero {
-  margin-bottom: 16px;
 }
 
 h1,
@@ -111,11 +109,28 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   border-radius: 8px;
   border: 1px solid var(--accent);
   text-decoration: none;
   font-weight: 700;
   padding: 9px 12px;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+}
+
+.btn-icon img {
+  display: block;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
 
 .btn.primary {
@@ -145,6 +160,19 @@ a {
 .site-footer {
   color: var(--muted);
   font-size: 14px;
+}
+
+.footer-links {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.footer-links a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
 }
 
 @media (max-width: 760px) {

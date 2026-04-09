@@ -8,6 +8,7 @@
       name="description"
       content="CleanedIn is a browser extension that reduces LinkedIn feed noise with category, identity, keyword, and age filters."
     />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
     <link rel="stylesheet" href="./site.css" />
   </head>
   <body>
@@ -30,11 +31,30 @@
         </p>
 
         <div class="actions">
-          <a class="btn primary" href="https://github.com/yasingedik/cleanedin" target="_blank" rel="noreferrer"
-            >GitHub Repository</a
+          <a
+            class="btn primary"
+            href="https://chromewebstore.google.com/detail/cleanedin-feed-filter/bkehbcmkfalhkfofndlcnpnjdefdgjjp?authuser=0&amp;hl=en"
+            target="_blank"
+            rel="noreferrer"
           >
-          <a class="btn secondary" href="./privacy-policy.html">Privacy Policy</a>
-          <a class="btn secondary" href="./terms-of-service.html">Terms of Service</a>
+            <span class="btn-icon" aria-hidden="true">
+              <img src="./chrome-icon.svg" alt="" />
+            </span>
+            <span>Add to Chrome</span>
+          </a
+          >
+          <a
+            class="btn secondary"
+            href="https://microsoftedge.microsoft.com/addons/detail/cleanedin-feed-filter/ghahgjdkejpbbdomfmbbikcdejlpnomf"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span class="btn-icon" aria-hidden="true">
+              <img src="./edge-icon.png" alt="" />
+            </span>
+            <span>Add to Edge</span>
+          </a
+          >
         </div>
       </article>
 
@@ -70,6 +90,11 @@
     </main>
 
     <footer class="site-footer">
+      <nav class="footer-links" aria-label="Secondary">
+        <a href="https://github.com/yasingedik/cleanedin" target="_blank" rel="noreferrer">GitHub Repository</a>
+        <a href="./privacy-policy.html">Privacy Policy</a>
+        <a href="./terms-of-service.html">Terms of Service</a>
+      </nav>
       <p>CleanedIn is an independent project and is not affiliated with LinkedIn Corporation.</p>
     </footer>
   </body>
