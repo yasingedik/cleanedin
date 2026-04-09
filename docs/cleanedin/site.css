@@ -109,12 +109,15 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   border-radius: 8px;
   border: 1px solid var(--accent);
   text-decoration: none;
   font-weight: 700;
-  padding: 9px 12px;
+  line-height: 1;
+  padding: 10px 14px;
+  min-height: 42px;
+  white-space: nowrap;
 }
 
 .btn-icon {
@@ -125,6 +128,7 @@ a {
   height: 20px;
   flex: 0 0 20px;
   overflow: hidden;
+  line-height: 0;
 }
 
 .btn-icon img {
@@ -136,6 +140,12 @@ a {
   flex: 0 0 20px;
   object-fit: contain;
   vertical-align: middle;
+}
+
+.btn-label {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
 }
 
 .btn.primary {
