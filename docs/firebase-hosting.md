@@ -44,6 +44,8 @@ Trigger:
 - `push` to `main` when `docs/cleanedin/**` or `firebase.json` changes
 - manual `workflow_dispatch`
 
+The workflow runs on Node 24 LTS and deploys with `firebase-tools@15.19.0`.
+
 Required GitHub repository secrets:
 - `FIREBASE_PROJECT_ID`: your Firebase project ID
 - `FIREBASE_SERVICE_ACCOUNT`: JSON content of a service account key with Firebase Hosting deploy access

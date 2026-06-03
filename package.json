@@ -21,7 +21,7 @@
     "feed-filter"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=24"
   },
   "type": "module",
   "scripts": {
@@ -40,18 +40,18 @@
     "release:major": "node scripts/release.mjs major"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
-    "@types/chrome": "^0.0.306",
-    "@types/jsdom": "^21.1.7",
-    "@types/node": "^22.19.17",
-    "@typescript-eslint/eslint-plugin": "^8.58.1",
-    "@typescript-eslint/parser": "^8.58.1",
-    "eslint": "^9.39.4",
+    "@playwright/test": "^1.60.0",
+    "@types/chrome": "^0.1.42",
+    "@types/jsdom": "^28.0.3",
+    "@types/node": "^24.12.4",
+    "@typescript-eslint/eslint-plugin": "^8.60.1",
+    "@typescript-eslint/parser": "^8.60.1",
+    "eslint": "^10.4.1",
     "eslint-config-prettier": "^10.1.1",
-    "jsdom": "^26.1.0",
-    "prettier": "^3.5.3",
-    "typescript": "^5.9.3",
-    "vite": "^6.4.2",
-    "vitest": "^4.1.0"
+    "jsdom": "^29.1.1",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
   }
 }

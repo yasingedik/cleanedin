@@ -22,6 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
       - name: Validate Firebase secrets
         env:
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
@@ -40,9 +45,18 @@ jobs:
           fi
 
       - name: Deploy to Firebase Hosting (live)
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
-          channelId: live
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+
+          credentials_file="${RUNNER_TEMP}/firebase-service-account.json"
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$credentials_file"
+
+          GOOGLE_APPLICATION_CREDENTIALS="$credentials_file" \
+            npx -y firebase-tools@15.19.0 deploy \
+              --only hosting \
+              --project "$FIREBASE_PROJECT_ID" \
+              --non-interactive

@@ -49,7 +49,7 @@ function buildTestExtensionDir(): {
   const manifestPath = resolve(extensionPath, 'manifest.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Manifest;
 
-  const testMatches = ['http://127.0.0.1/*', 'http://localhost/*'];
+  const testMatches = ['http://*/*', 'https://*/*'];
   manifest.host_permissions = uniqueEntries([...(manifest.host_permissions ?? []), ...testMatches]);
 
   manifest.content_scripts = (manifest.content_scripts ?? []).map((script) => ({

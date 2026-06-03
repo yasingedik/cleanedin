@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
@@ -24,12 +24,30 @@ function copyManifestPlugin(): Plugin {
   };
 }
 
+function classicContentScriptPlugin(): Plugin {
+  return {
+    name: 'classic-content-script',
+    apply: 'build',
+    writeBundle() {
+      const loaderPath = resolve(projectRoot, 'dist/content-loader.js');
+
+      if (!existsSync(loaderPath)) {
+        return;
+      }
+
+      const code = readFileSync(loaderPath, 'utf8');
+      writeFileSync(loaderPath, code.replaceAll('import.meta.url', 'globalThis.location.href'));
+    }
+  };
+}
+
 export default defineConfig({
   base: './',
-  plugins: [copyManifestPlugin()],
+  plugins: [copyManifestPlugin(), classicContentScriptPlugin()],
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    modulePreload: false,
     sourcemap: false,
     rollupOptions: {
       input: {

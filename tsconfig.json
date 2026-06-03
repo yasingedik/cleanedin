@@ -12,8 +12,7 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
-    "types": ["chrome", "node", "vitest/globals", "vite/client"],
-    "baseUrl": "."
+    "types": ["chrome", "node", "vitest/globals", "vite/client"]
   },
   "include": ["src", "tests", "vite.config.ts", "vitest.config.ts", "playwright.config.ts"]
 }

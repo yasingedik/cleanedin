@@ -33,7 +33,7 @@ CleanedIn is a Manifest V3 extension that filters LinkedIn feed noise with compa
 
 ### Prerequisites
 
-- Node.js `>=18` (Node 22 used in CI)
+- Node.js `>=24` (Node 24 LTS used in CI)
 - npm
 
 ### Install
