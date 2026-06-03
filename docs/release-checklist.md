@@ -1,11 +1,13 @@
 # Release Checklist
 
-1. Bump version with one command:
+1. Bump version with one command, either from GitHub Actions or locally:
+   - GitHub Actions: run `release-version`, enter the exact version number, for example `0.1.11`
    - patch: `npm run release:patch`
    - minor: `npm run release:minor`
    - major: `npm run release:major`
    - exact version: `npm run release -- 0.1.1`
    - This updates `package.json`, syncs `manifest.json`, creates a commit, creates tag `vX.Y.Z`, then pushes both `HEAD` and tag `vX.Y.Z` to `origin`.
+   - The GitHub Actions workflow requires a `RELEASE_TOKEN` repository secret with repository Contents read/write access so the pushed tag triggers downstream workflows.
 2. Run quality checks:
    - `npm run lint`
    - `npm run typecheck`
