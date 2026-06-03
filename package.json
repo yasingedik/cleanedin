@@ -1,6 +1,6 @@
 {
   "name": "cleanedin-extension",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Manifest V3 extension to declutter LinkedIn feed posts with category, identity, keyword, and age filters.",
   "private": true,
   "license": "GPL-3.0-or-later",
