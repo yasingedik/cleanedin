@@ -1,0 +1,166 @@
+name: keep-store-auth-alive
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/keep-store-auth-alive.yml
+  schedule:
+    - cron: '23 14 1 * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keep-store-auth-alive
+  cancel-in-progress: false
+
+jobs:
+  google:
+    name: Refresh Google OAuth
+    runs-on: ubuntu-latest
+    env:
+      CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+      CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+      CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+      CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID || vars.CWS_PUBLISHER_ID }}
+      CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID || vars.CWS_EXTENSION_ID }}
+    steps:
+      - name: Validate Google OAuth configuration
+        run: |
+          set -euo pipefail
+
+          missing=()
+          for name in CWS_CLIENT_ID CWS_CLIENT_SECRET CWS_REFRESH_TOKEN CWS_PUBLISHER_ID CWS_EXTENSION_ID; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Missing required Google configuration values: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Exchange Google refresh token
+        id: google_token
+        run: |
+          set -euo pipefail
+
+          http_code="$(curl -sS -o google-token-response.json -w '%{http_code}' \
+            -X POST https://oauth2.googleapis.com/token \
+            --data-urlencode "client_id=${CWS_CLIENT_ID}" \
+            --data-urlencode "client_secret=${CWS_CLIENT_SECRET}" \
+            --data-urlencode "refresh_token=${CWS_REFRESH_TOKEN}" \
+            --data-urlencode "grant_type=refresh_token")"
+
+          if [ "$http_code" != "200" ]; then
+            echo "Google token refresh failed (HTTP $http_code)."
+            jq -c '{error, error_description}' google-token-response.json 2>/dev/null || cat google-token-response.json
+            exit 1
+          fi
+
+          access_token="$(jq -r '.access_token // empty' google-token-response.json)"
+          if [ -z "$access_token" ]; then
+            echo "Google token response did not include an access_token."
+            exit 1
+          fi
+
+          echo "::add-mask::$access_token"
+          echo "access_token=$access_token" >> "$GITHUB_OUTPUT"
+          echo "Google OAuth token refreshed successfully."
+
+      - name: Verify Chrome Web Store access
+        env:
+          ACCESS_TOKEN: ${{ steps.google_token.outputs.access_token }}
+        run: |
+          set -euo pipefail
+
+          status_url="https://chromewebstore.googleapis.com/v2/publishers/${CWS_PUBLISHER_ID}/items/${CWS_EXTENSION_ID}:fetchStatus"
+          http_code="$(curl -sS -o chrome-status-response.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            -X GET \
+            "$status_url")"
+
+          if [ "$http_code" != "200" ]; then
+            echo "Chrome Web Store access check failed (HTTP $http_code)."
+            cat chrome-status-response.json || true
+            exit 1
+          fi
+
+          echo "Chrome Web Store access verified."
+
+  microsoft:
+    name: Refresh Microsoft OAuth
+    runs-on: ubuntu-latest
+    env:
+      MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID || secrets.EDGE_CLIENT_ID }}
+      MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET || secrets.EDGE_CLIENT_SECRET }}
+      MICROSOFT_TOKEN_URL: ${{ secrets.MICROSOFT_TOKEN_URL || secrets.EDGE_TOKEN_URL }}
+      MICROSOFT_SCOPE: ${{ vars.MICROSOFT_OAUTH_SCOPE }}
+      EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+    steps:
+      - name: Resolve Microsoft authentication mode
+        id: microsoft_config
+        run: |
+          set -euo pipefail
+
+          if [ -n "${MICROSOFT_CLIENT_SECRET:-}" ]; then
+            if [ -z "${MICROSOFT_CLIENT_ID:-}" ]; then
+              echo "A Microsoft client secret is configured, but the client ID is missing."
+              exit 1
+            fi
+
+            token_url="${MICROSOFT_TOKEN_URL:-https://login.microsoftonline.com/5c9eedce-81bc-42f3-8823-48ba6258b391/oauth2/v2.0/token}"
+            scope="${MICROSOFT_SCOPE:-https://api.addons.microsoftedge.microsoft.com/.default}"
+            echo "mode=oauth" >> "$GITHUB_OUTPUT"
+            echo "token_url=$token_url" >> "$GITHUB_OUTPUT"
+            echo "scope=$scope" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -n "${EDGE_API_KEY:-}" ] && [ -n "${MICROSOFT_CLIENT_ID:-}" ]; then
+            echo "mode=api-key" >> "$GITHUB_OUTPUT"
+            echo "::warning::Edge publishing currently uses an API key. API keys have a fixed expiry and cannot be refreshed through OAuth."
+            exit 0
+          fi
+
+          echo "No Microsoft OAuth client secret or Edge API key configuration was found."
+          echo "Set MICROSOFT_CLIENT_SECRET or EDGE_CLIENT_SECRET to enable a token exchange."
+          exit 1
+
+      - name: Exchange Microsoft client credentials
+        if: ${{ steps.microsoft_config.outputs.mode == 'oauth' }}
+        run: |
+          set -euo pipefail
+
+          http_code="$(curl -sS -o microsoft-token-response.json -w '%{http_code}' \
+            -X POST "${{ steps.microsoft_config.outputs.token_url }}" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "client_id=${MICROSOFT_CLIENT_ID}" \
+            --data-urlencode "client_secret=${MICROSOFT_CLIENT_SECRET}" \
+            --data-urlencode "scope=${{ steps.microsoft_config.outputs.scope }}" \
+            --data-urlencode "grant_type=client_credentials")"
+
+          if [ "$http_code" != "200" ]; then
+            echo "Microsoft token refresh failed (HTTP $http_code)."
+            jq -c '{error, error_description}' microsoft-token-response.json 2>/dev/null || cat microsoft-token-response.json
+            exit 1
+          fi
+
+          access_token="$(jq -r '.access_token // empty' microsoft-token-response.json)"
+          if [ -z "$access_token" ]; then
+            echo "Microsoft token response did not include an access_token."
+            exit 1
+          fi
+
+          echo "::add-mask::$access_token"
+          echo "Microsoft OAuth token refreshed successfully."
+
+      - name: Report Microsoft API-key mode
+        if: ${{ steps.microsoft_config.outputs.mode == 'api-key' }}
+        run: |
+          echo "Microsoft Edge credentials are present, but the current v1.1 integration uses EDGE_API_KEY rather than an OAuth client secret."
+          echo "Review the API key expiry date in Partner Center; using the key does not extend that date."
