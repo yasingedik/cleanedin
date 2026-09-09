@@ -4,7 +4,13 @@ Thanks for contributing to CleanedIn.
 
 ## Development Workflow
 
-1. Fork the repo and create a branch from `main`.
+1. Fork the repo and create a branch from `main` for ordinary maintenance.
+   For modular-release issues #19 through #36, branch from
+   `develop/modular-extension` and target that branch in your PR. Follow the
+   [modular workflow](docs/modular-release.md#development-and-integration) and
+   [module boundaries](docs/architecture.md#module-ownership-and-allowed-dependencies).
+   Merge prerequisite issue PRs there before starting dependent work; reserve
+   `main` for the final reviewed integration PR.
 2. Install dependencies and run local checks.
 3. Add or update tests for behavior changes.
 4. Open a pull request with a clear summary and validation notes.
