@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "profile": "quick",
+  "status": "passed",
+  "startedAt": "2026-09-11T16:15:33.747Z",
+  "environment": {
+    "node": "24.19.0",
+    "npm": "11.9.0",
+    "os": "linux",
+    "osRelease": "6.18.35",
+    "arch": "x64"
+  },
+  "checks": [
+    {
+      "name": "ai:doctor",
+      "command": "npm run ai:doctor",
+      "status": "passed",
+      "startedAt": "2026-09-11T16:15:33.884Z",
+      "durationMs": 660,
+      "exitCode": 0,
+      "signal": null,
+      "errorCode": null
+    },
+    {
+      "name": "test:harness",
+      "command": "npm run test:harness",
+      "status": "passed",
+      "startedAt": "2026-09-11T16:15:34.545Z",
+      "durationMs": 1131,
+      "exitCode": 0,
+      "signal": null,
+      "errorCode": null
+    },
+    {
+      "name": "whitespace",
+      "command": "git diff --check HEAD",
+      "status": "passed",
+      "startedAt": "2026-09-11T16:15:35.677Z",
+      "durationMs": 3,
+      "exitCode": 0,
+      "signal": null,
+      "errorCode": null
+    },
+    {
+      "name": "lint",
+      "command": "npm run lint",
+      "status": "passed",
+      "startedAt": "2026-09-11T16:15:35.682Z",
+      "durationMs": 3340,
+      "exitCode": 0,
+      "signal": null,
+      "errorCode": null
+    },
+    {
+      "name": "typecheck",
+      "command": "npm run typecheck",
+      "status": "passed",
+      "startedAt": "2026-09-11T16:15:39.023Z",
+      "durationMs": 2443,
+      "exitCode": 0,
+      "signal": null,
+      "errorCode": null
+    },
+    {
+      "name": "test",
+      "command": "npm run test",
+      "status": "passed",
+      "startedAt": "2026-09-11T16:15:41.467Z",
+      "durationMs": 2742,
+      "exitCode": 0,
+      "signal": null,
+      "errorCode": null
+    },
+    {
+      "name": "test:fixtures",
+      "command": "npm run test:fixtures",
+      "status": "passed",
+      "startedAt": "2026-09-11T16:15:44.210Z",
+      "durationMs": 1228,
+      "exitCode": 0,
+      "signal": null,
+      "errorCode": null
+    },
+    {
+      "name": "test:security",
+      "command": "npm run test:security",
+      "status": "passed",
+      "startedAt": "2026-09-11T16:15:45.438Z",
+      "durationMs": 1322,
+      "exitCode": 0,
+      "signal": null,
+      "errorCode": null
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "status": "passed",
+      "startedAt": "2026-09-11T16:15:46.761Z",
+      "durationMs": 505,
+      "exitCode": 0,
+      "signal": null,
+      "errorCode": null
+    }
+  ],
+  "sourceBefore": {
+    "head": "4dceea71bcc255aa98bbe84bcb06a224e1343a3d",
+    "branch": "test/20-behavior-baseline",
+    "dirty": false,
+    "worktreeSha256": "7cc6340fda42e40a82c2e53798b7ea1f7018a179a23eb43f7c087abaefc44e75"
+  },
+  "sourceAfter": {
+    "head": "4dceea71bcc255aa98bbe84bcb06a224e1343a3d",
+    "branch": "test/20-behavior-baseline",
+    "dirty": false,
+    "worktreeSha256": "7cc6340fda42e40a82c2e53798b7ea1f7018a179a23eb43f7c087abaefc44e75"
+  },
+  "sourceChanged": false,
+  "finishedAt": "2026-09-11T16:15:47.281Z"
+}

@@ -43,7 +43,8 @@ test('full validation includes all suites and builds before installed extension 
     'test:security',
     'build',
     'audit',
-    'test:e2e'
+    'test:e2e',
+    'test:baseline'
   ]) {
     assert.ok(names.includes(name), `missing ${name}`);
   }

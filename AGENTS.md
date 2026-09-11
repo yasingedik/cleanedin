@@ -56,7 +56,7 @@ Use Node 24 (`.nvmrc`) and `npm ci`. See `docs/ai/README.md` for browser setup.
 - `npm run ai:check -- --docs`: harness self-tests and working-diff whitespace.
   Use for documentation-only edits; this does not validate extension behavior.
 - `npm run ai:check`: harness checks, lint, types, unit, fixture, security and build.
-- `npm run ai:check -- --full`: all of the above, production dependency audit and
+- `npm run ai:check -- --full`: all of the above, component performance baseline, production dependency audit and
   installed Chromium extension E2E. CI runs this profile under Xvfb.
 
 Run focused checks while editing, then the relevant profile on the final changes.

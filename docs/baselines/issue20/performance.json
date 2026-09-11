@@ -1,0 +1,220 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": "2026-09-11T16:26:42.308Z",
+  "source": {
+    "head": "4dceea71bcc255aa98bbe84bcb06a224e1343a3d",
+    "dirty": true,
+    "runtimeSha256": "ae790a96bd553d0e4190865a7b80d3ed53090abe76a22d3bc5741a4c7e821532",
+    "lockfileSha256": "6d657484ecb75eb100522c2d1e1ec8ca407e1ffe2e15f55624c78e64c2ac97d1",
+    "workloadSha256": "d16765868fcfdae82502d2832cd5bfe4e500a6d61edf709f7126899d94c5f7db"
+  },
+  "environment": {
+    "node": "24.19.0",
+    "os": "linux",
+    "osRelease": "6.18.35",
+    "arch": "x64",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "logicalCpus": 9,
+    "vitest": "5.0.0",
+    "jsdom": "29.1.1"
+  },
+  "method": {
+    "sizes": [
+      25,
+      50,
+      100
+    ],
+    "repetitions": 3,
+    "warmups": 1,
+    "settingsPasses": 4,
+    "burstSize": 100,
+    "touchedPosts": 10,
+    "debounceMs": 80,
+    "advancedTimersMs": 240,
+    "scope": "jsdom component pipeline; virtual debounce timers; real wall time; excludes layout, extension APIs and content-controller startup"
+  },
+  "summary": [
+    {
+      "scenario": "growing-feed",
+      "posts": 25,
+      "evaluations": 25,
+      "hidden": 13,
+      "badges": 13,
+      "medianMs": 72.834,
+      "minMs": 72.653,
+      "maxMs": 91.307
+    },
+    {
+      "scenario": "growing-feed",
+      "posts": 50,
+      "evaluations": 25,
+      "hidden": 25,
+      "badges": 25,
+      "medianMs": 92.049,
+      "minMs": 86.265,
+      "maxMs": 99.213
+    },
+    {
+      "scenario": "growing-feed",
+      "posts": 100,
+      "evaluations": 50,
+      "hidden": 50,
+      "badges": 50,
+      "medianMs": 205.856,
+      "minMs": 198.171,
+      "maxMs": 225.094
+    },
+    {
+      "scenario": "settings-reevaluation",
+      "posts": 100,
+      "evaluations": 400,
+      "hidden": 50,
+      "badges": 50,
+      "medianMs": 1111.713,
+      "minMs": 1077.03,
+      "maxMs": 1122.763
+    },
+    {
+      "scenario": "repeated-element-mutations",
+      "posts": 100,
+      "evaluations": 10,
+      "hidden": 50,
+      "badges": 50,
+      "callbacks": 1,
+      "medianMs": 128.751,
+      "minMs": 124.472,
+      "maxMs": 133.297
+    }
+  ],
+  "samples": [
+    [
+      {
+        "scenario": "growing-feed",
+        "posts": 25,
+        "elapsedMs": 91.307,
+        "evaluations": 25,
+        "hidden": 13,
+        "badges": 13
+      },
+      {
+        "scenario": "growing-feed",
+        "posts": 50,
+        "elapsedMs": 99.213,
+        "evaluations": 25,
+        "hidden": 25,
+        "badges": 25
+      },
+      {
+        "scenario": "growing-feed",
+        "posts": 100,
+        "elapsedMs": 225.094,
+        "evaluations": 50,
+        "hidden": 50,
+        "badges": 50
+      },
+      {
+        "scenario": "settings-reevaluation",
+        "posts": 100,
+        "elapsedMs": 1122.763,
+        "evaluations": 400,
+        "hidden": 50,
+        "badges": 50
+      },
+      {
+        "scenario": "repeated-element-mutations",
+        "posts": 100,
+        "elapsedMs": 128.751,
+        "evaluations": 10,
+        "hidden": 50,
+        "badges": 50,
+        "callbacks": 1
+      }
+    ],
+    [
+      {
+        "scenario": "growing-feed",
+        "posts": 25,
+        "elapsedMs": 72.653,
+        "evaluations": 25,
+        "hidden": 13,
+        "badges": 13
+      },
+      {
+        "scenario": "growing-feed",
+        "posts": 50,
+        "elapsedMs": 86.265,
+        "evaluations": 25,
+        "hidden": 25,
+        "badges": 25
+      },
+      {
+        "scenario": "growing-feed",
+        "posts": 100,
+        "elapsedMs": 205.856,
+        "evaluations": 50,
+        "hidden": 50,
+        "badges": 50
+      },
+      {
+        "scenario": "settings-reevaluation",
+        "posts": 100,
+        "elapsedMs": 1077.03,
+        "evaluations": 400,
+        "hidden": 50,
+        "badges": 50
+      },
+      {
+        "scenario": "repeated-element-mutations",
+        "posts": 100,
+        "elapsedMs": 133.297,
+        "evaluations": 10,
+        "hidden": 50,
+        "badges": 50,
+        "callbacks": 1
+      }
+    ],
+    [
+      {
+        "scenario": "growing-feed",
+        "posts": 25,
+        "elapsedMs": 72.834,
+        "evaluations": 25,
+        "hidden": 13,
+        "badges": 13
+      },
+      {
+        "scenario": "growing-feed",
+        "posts": 50,
+        "elapsedMs": 92.049,
+        "evaluations": 25,
+        "hidden": 25,
+        "badges": 25
+      },
+      {
+        "scenario": "growing-feed",
+        "posts": 100,
+        "elapsedMs": 198.171,
+        "evaluations": 50,
+        "hidden": 50,
+        "badges": 50
+      },
+      {
+        "scenario": "settings-reevaluation",
+        "posts": 100,
+        "elapsedMs": 1111.713,
+        "evaluations": 400,
+        "hidden": 50,
+        "badges": 50
+      },
+      {
+        "scenario": "repeated-element-mutations",
+        "posts": 100,
+        "elapsedMs": 124.472,
+        "evaluations": 10,
+        "hidden": 50,
+        "badges": 50,
+        "callbacks": 1
+      }
+    ]
+  ]
+}

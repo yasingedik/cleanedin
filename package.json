@@ -36,6 +36,7 @@
     "test": "vitest run tests/unit",
     "test:fixtures": "vitest run tests/fixtures",
     "test:security": "vitest run tests/security",
+    "test:baseline": "vitest run tests/performance --maxWorkers=1",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium",
     "version": "node scripts/sync-manifest-version.mjs && git add manifest.json",
