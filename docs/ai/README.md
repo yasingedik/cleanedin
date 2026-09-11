@@ -45,10 +45,13 @@ matches only in that temporary test copy. It never needs a LinkedIn login.
 | --- | --- | --- |
 | `npm run ai:check -- --docs` | Doctor, harness self-tests, working-diff whitespace | Documentation-only work |
 | `npm run ai:check` | Docs profile, lint, typecheck, unit, fixtures, security, build | Runtime/tooling changes and local iteration |
-| `npm run ai:check -- --full` | Quick profile, production dependency audit, installed Chromium E2E | CI and browser acceptance evidence |
+| `npm run ai:check -- --full` | Quick profile, component performance baseline, production dependency audit, installed Chromium E2E | CI and browser acceptance evidence |
 
 All profiles fail on the first failed check and record remaining checks as skipped.
 Use `npm run test:security` to run the existing security suite independently.
+Use `npm run test:baseline` for the repeatable component workload and
+`.ai/reports/performance.json`. See [the baseline guide](../baselines/issue20/README.md)
+for measurements and the distinction between component timing and browser performance.
 Profiles are defined in `scripts/ai-harness.mjs`; CI calls the full profile so
 local and CI command selection cannot diverge. `git diff --check HEAD` covers
 staged and unstaged tracked edits, not committed PR changes or untracked files.
@@ -102,10 +105,9 @@ agent instruction files in its [custom instructions guide](https://docs.github.c
 Support depends on the agent/client; explicitly ask an unfamiliar agent to read
 AGENTS.md. Instructions guide agents but are not access controls.
 
-This preparatory change runs the previously omitted security suite and closes
-that command-selection gap from #20. Issue #20 still owns characterization
-fixtures, actual UI/persistence assertions, performance scenarios and baseline
-measurements. Module import enforcement, WXT manifests, browser API contracts and
+The harness runs the previously omitted security suite. Issue #20 adds
+[characterization and performance evidence](../baselines/issue20/README.md).
+Module import enforcement, WXT manifests, browser API contracts and
 Firefox/Safari/device coverage arrive in their planned issues. A green harness
 today does not mean those capabilities exist.
 

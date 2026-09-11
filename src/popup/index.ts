@@ -527,7 +527,11 @@ function bindUIEvents(): void {
     });
   }
 
-  document.body.addEventListener('change', () => {
+  document.body.addEventListener('change', (event) => {
+    if (event.target === importFile) {
+      return;
+    }
+
     maxAgeDays.disabled = readValueActionSwitch(ageAction) === 'off';
     requestPersistFromUI();
   });

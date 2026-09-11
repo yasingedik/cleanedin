@@ -122,6 +122,7 @@ export function checkPlan(profile, npmPath) {
     );
   if (profile === 'full')
     steps.push(
+      npm('test:baseline'),
       {
         name: 'audit',
         command: process.execPath,

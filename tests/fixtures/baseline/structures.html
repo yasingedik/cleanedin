@@ -1,0 +1,59 @@
+<!-- Synthetic examples composed from supported selector shapes. All identities are fictional. -->
+<main>
+  <div data-testid="mainFeed">
+    <div id="wrapped" role="listitem" data-id="urn:li:activity:2001">
+      <div data-view-name="feed-full-update">
+        <article id="inner-article" data-urn="urn:li:activity:2001">
+          <header data-view-name="feed-actor">
+            <a href="https://www.linkedin.com/in/fixture-author"
+              >Fixture Author</a
+            >
+            • 1st <time>2d</time>
+          </header>
+          <p data-view-name="feed-commentary">
+            Cloud infrastructure includes a mention of Fixture Mention.
+          </p>
+          <video controls></video>
+          <button>Like</button><button>Comment</button>
+        </article>
+      </div>
+      <div data-view-name="comment-container" id="comments">
+        <a href="https://www.linkedin.com/in/fixture-commenter"
+          >Fixture Commenter</a
+        >
+        <button>Following</button><span>Comment-only keyword</span>
+      </div>
+    </div>
+    <article id="nested-parent" data-urn="urn:li:activity:2002">
+      <header data-view-name="feed-actor">
+        <a href="https://www.linkedin.com/in/fixture-parent">Fixture Parent</a>
+        • 2nd <time>3h</time>
+      </header>
+      <p data-view-name="feed-commentary">An outer fixture post.</p>
+      <article id="nested-child" data-urn="urn:li:activity:2003">
+        <p>A quoted fixture post.</p>
+        <video controls></video>
+      </article>
+      <button>Like</button><button>Comment</button>
+    </article>
+    <article id="missing">
+      <p>A plain fixture with no author or timestamp.</p>
+    </article>
+    <article id="fallback-a">
+      <p data-view-name="feed-commentary">First fallback fixture.</p>
+    </article>
+    <article id="fallback-b">
+      <p data-view-name="feed-commentary">Second fallback fixture.</p>
+    </article>
+    <article id="comment-leak" data-urn="urn:li:activity:2004">
+      <p>Plain fixture body.</p>
+      <div data-view-name="comment-container">
+        <a href="https://www.linkedin.com/in/fixture-commenter"
+          >Fixture Commenter</a
+        ><time>1d</time>
+        <p>Comment-only keyword</p>
+        <video controls></video>
+      </div>
+    </article>
+  </div>
+</main>
