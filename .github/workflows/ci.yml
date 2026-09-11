@@ -17,11 +17,15 @@ jobs:
           node-version: '24'
           cache: 'npm'
       - run: npm ci
-      - run: npm audit --omit=dev --audit-level=moderate
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm run test
-      - run: npm run test:fixtures
-      - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - run: xvfb-run --auto-servernum npm run test:e2e
+      - name: Validate with shared AI harness
+        run: xvfb-run --auto-servernum npm run ai:check -- --full
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .ai/reports/*.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

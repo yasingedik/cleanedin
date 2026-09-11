@@ -17,16 +17,17 @@ Thanks for contributing to CleanedIn.
 
 ## Local Setup
 
+For AI-assisted work, start with [AGENTS.md](AGENTS.md) and the
+[AI development harness](docs/ai/README.md). Its shared validation commands also
+work for human contributors and are used by CI.
+
 ```bash
 npm ci
-npm run lint
-npm run typecheck
-npm run test
-npm run test:fixtures
-npm run build
+npm run ai:check
 ```
 
-Run `npm run test:e2e` for browser-level changes.
+Run `npm run ai:check -- --full` for browser-level changes after installing
+Chromium; see the harness guide for Linux Xvfb setup.
 For manual browser validation, follow `docs/local-browser-testing.md`.
 
 ## Coding Guidelines

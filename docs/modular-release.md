@@ -182,7 +182,9 @@ Before opening the final integration PR to `main`:
   branch and evidence for its acceptance criteria; #36 has completed candidate
   preparation and remains open for distribution.
 - [ ] Pure core, semantic, DOM fixture, security and platform contract suites pass.
-  The baseline commands omit `tests/security`; #20 must fix selection.
+  The original baseline commands omitted `tests/security`; the
+  [AI harness](ai/README.md) now includes it in quick/full validation and CI.
+  #20 still owns expanded characterization coverage and baseline measurements.
 - [ ] Real installed-extension checks cover Chromium, Firefox and Safari, including
   Safari iPhone/iPad, with the minimum/current versions recorded.
 - [ ] Current LinkedIn smoke checks and sanitized variant fixtures pass; API
