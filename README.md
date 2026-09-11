@@ -115,6 +115,10 @@ Release steps are documented in `docs/release-checklist.md`.
 
 ## Modular Extension Development
 
+For AI-assisted contributions, read [AGENTS.md](AGENTS.md) and the
+[AI development harness](docs/ai/README.md). Run `npm run ai:check` for the shared
+local validation loop; CI uses the full profile and saves a JSON evidence report.
+
 The next cross-browser version is developed on `develop/modular-extension`.
 Issue PRs target that branch; one final integration PR will target `main` after
 implementation and candidate validation. See the [architecture](docs/architecture.md)

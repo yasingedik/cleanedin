@@ -2,6 +2,7 @@ node_modules/
 dist/
 playwright-report/
 test-results/
+.ai/
 .DS_Store
 
 # Local captures and personal feed exports
