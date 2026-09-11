@@ -1,5 +1,11 @@
 # Release Checklist
 
+For the modular cross-browser release, complete the
+[modular release gates](modular-release.md#completion-and-release-gates) before
+using the publication steps below. Do not run release scripts or create release
+tags for intermediate work on `develop/modular-extension`; issue PRs target that
+branch and the final integration PR targets `main`.
+
 1. Bump version with one command, either from GitHub Actions or locally:
    - GitHub Actions: run `release-version`, enter the exact version number, for example `0.1.11`
    - patch: `npm run release:patch`

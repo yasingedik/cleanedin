@@ -113,6 +113,15 @@ Release steps are documented in `docs/release-checklist.md`.
 - `tests/`: unit, fixtures, e2e, and security tests
 - `docs/`: operational documentation
 
+## Modular Extension Development
+
+The next cross-browser version is developed on `develop/modular-extension`.
+Issue PRs target that branch; one final integration PR will target `main` after
+implementation and candidate validation. See the [architecture](docs/architecture.md)
+and [release scope and workflow](docs/modular-release.md) for the design, preserved
+behavior, browser targets, and ordered issues. Firefox and Safari support are
+planned and are not part of the current release.
+
 ## Roadmap
 
 See `ROADMAP.md` (includes mobile companion app exploration).
