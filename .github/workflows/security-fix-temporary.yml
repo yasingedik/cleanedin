@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - fix/audit-all-npm-dependencies
+    paths:
+      - package.json
 permissions:
   contents: write
 jobs:
@@ -17,6 +19,8 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      - name: Resolve intentional overrides into lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - run: npm ci
       - name: Apply nonbreaking npm security fixes
         shell: bash
