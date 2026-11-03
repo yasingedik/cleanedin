@@ -1,3 +1,5 @@
+
+
 # CleanedIn
 
 CleanedIn is a Manifest V3 extension that filters LinkedIn feed noise with compact, rule-based controls.
@@ -67,6 +69,8 @@ npm run test:fixtures
 npm run build
 npm run test:e2e
 ```
+
+Run `npm run test:e2e:install` once before the E2E step if Playwright Chromium is not installed.
 
 ## Store Packages (Chrome + Edge)
 
